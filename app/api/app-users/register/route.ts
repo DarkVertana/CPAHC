@@ -12,7 +12,8 @@ import { validateApiKey } from '@/lib/middleware';
  * 
  * Behavior:
  * - If user doesn't exist: Creates a new user record with all provided data
- * - If user already exists: Returns existing user data without registering again
+ * - If user email already exists: Rejects registration with 409 error to prevent duplicates
+ * - If user wpUserId already exists: Returns existing user data without registering again
  *   - Updates login tracking (IP, login count, last login time, status)
  *   - Does NOT update user data fields (name, email, weight, etc.) for existing users
  * - Automatically tracks login count, last login time, and IP address
@@ -72,12 +73,32 @@ export async function POST(request: NextRequest) {
     // Get client IP address
     const clientIp = getClientIp(request);
 
+    // Normalize email for comparison
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Check if user already exists by email (to prevent duplicates)
+    const existingUserByEmail = await prisma.appUser.findFirst({
+      where: { email: normalizedEmail },
+    });
+
+    if (existingUserByEmail) {
+      // User with this email already exists - reject registration
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'User with this email already exists',
+          message: 'Registration rejected. This email is already registered.',
+        },
+        { status: 409 }
+      );
+    }
+
     // Check if user already exists by wpUserId
-    const existingUser = await prisma.appUser.findUnique({
+    const existingUserByWpId = await prisma.appUser.findUnique({
       where: { wpUserId: String(wpUserId) },
     });
 
-    if (existingUser) {
+    if (existingUserByWpId) {
       // User already exists - return existing user data without registering again
       // Optionally update login tracking fields (IP, login count, last login time, status)
       const updatedUser = await prisma.appUser.update({
@@ -85,7 +106,7 @@ export async function POST(request: NextRequest) {
         data: {
           lastLoginAt: new Date(),
           lastLoginIp: clientIp,
-          loginCount: existingUser.loginCount + 1,
+          loginCount: existingUserByWpId.loginCount + 1,
           status: 'Active',
         },
       });
@@ -97,11 +118,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Create new user
+    // Create new user (email and wpUserId are both unique at this point)
     const newUser = await prisma.appUser.create({
       data: {
         wpUserId: String(wpUserId),
-        email: email.toLowerCase().trim(),
+        email: normalizedEmail,
         name: name || displayName,
         displayName: displayName || name,
         phone: phone,
