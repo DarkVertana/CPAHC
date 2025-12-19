@@ -135,6 +135,9 @@ model AppUser {
   lastLoginIp    String?
   loginCount     Int      @default(0)
   
+  // Relations
+  weightLogs     WeightLog[]
+  
   // Timestamps
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -142,4 +145,86 @@ model AppUser {
   @@index([email])
   @@index([wpUserId])
   @@map("app_user")
+}
+
+model Blog {
+  id            String   @id @default(cuid())
+  title         String
+  tagline       String
+  description   String   @db.Text // Rich text HTML content
+  tags          String[] // Array of tags
+  featuredImage String
+  status        String   @default("published") // published, draft
+  
+  // Timestamps
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status])
+  @@map("blogs")
+}
+
+model MedicineCategory {
+  id        Int      @id @default(autoincrement())
+  title     String
+  tagline   String?
+  
+  // Relations
+  medicines Medicine[]
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([title])
+  @@map("medicine_categories")
+}
+
+model Medicine {
+  id          String   @id @default(cuid())
+  categoryId Int
+  title       String
+  tagline     String?
+  description String?  @db.Text
+  image       String?
+  url         String?
+  status      String   @default("active") // active, inactive
+  
+  // Relations
+  category MedicineCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([categoryId])
+  @@index([status])
+  @@index([title])
+  @@map("medicines")
+}
+
+model WeightLog {
+  id            String   @id @default(cuid())
+  appUserId     String   // Foreign key to AppUser
+  userId        String   // Reference to app_user (wpUserId or email) - kept for backward compatibility
+  userEmail     String   // User email for easy lookup
+  userName      String?  // User name for display
+  date          DateTime @default(now())
+  weight        Float    // Weight in lbs
+  previousWeight Float?  // Previous weight for comparison
+  change        Float?   // Change in lbs (calculated)
+  changeType    String?  // 'increase', 'decrease', 'no-change'
+  
+  // Relations
+  appUser       AppUser  @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+  
+  // Timestamps
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([appUserId])
+  @@index([userId])
+  @@index([userEmail])
+  @@index([date])
+  @@map("weight_logs")
 }

@@ -4,114 +4,118 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-
-type Blog = {
-  id: number;
-  title: string;
-  tagline: string;
-  description: string;
-  tag: string;
-  featuredImage: string;
-  createdAt: string;
-};
+import RichTextEditor from '@/app/components/RichTextEditor';
 
 export default function EditBlogPage() {
   const router = useRouter();
   const params = useParams();
   const blogId = params?.id as string;
 
-  // Sample blog data - in real app, fetch from API
-  const sampleBlogs: Blog[] = [
-    {
-      id: 1,
-      title: '10 Essential Tips for Healthy Weight Loss',
-      tagline: 'Discover proven strategies to achieve your weight loss goals naturally',
-      description: 'Weight loss is a journey that requires dedication, patience, and the right approach. In this comprehensive guide, we explore ten essential tips that can help you achieve your weight loss goals in a healthy and sustainable way. From nutrition advice to exercise routines, learn how to create a balanced lifestyle that supports your wellness journey.',
-      tag: 'Weight Loss',
-      featuredImage: '/images/blog1.jpg',
-      createdAt: '2024-01-15'
-    },
-    {
-      id: 2,
-      title: 'The Science Behind Intermittent Fasting',
-      tagline: 'Understanding how intermittent fasting can transform your health',
-      description: 'Intermittent fasting has gained significant attention in recent years as a powerful tool for improving health and managing weight. This article delves into the scientific research behind intermittent fasting, exploring its benefits for metabolism, cellular repair, and overall well-being. Discover different fasting methods and learn how to safely incorporate this practice into your lifestyle.',
-      tag: 'Nutrition',
-      featuredImage: '/images/blog2.jpg',
-      createdAt: '2024-01-20'
-    },
-    {
-      id: 3,
-      title: 'Building a Sustainable Exercise Routine',
-      tagline: 'Create a workout plan that fits your lifestyle and goals',
-      description: 'Creating a sustainable exercise routine is key to long-term fitness success. This guide provides practical advice on designing a workout plan that aligns with your lifestyle, fitness level, and personal goals. Learn about different types of exercises, how to structure your weekly routine, and tips for staying motivated and consistent.',
-      tag: 'Fitness',
-      featuredImage: '/images/blog3.jpg',
-      createdAt: '2024-01-25'
-    },
-    {
-      id: 4,
-      title: 'Mental Health and Wellness: A Holistic Approach',
-      tagline: 'Exploring the connection between mind and body wellness',
-      description: 'Mental health and physical wellness are deeply interconnected. This article explores the holistic approach to health, examining how our mental state affects our physical well-being and vice versa. Learn about stress management techniques, mindfulness practices, and strategies for maintaining emotional balance in your daily life.',
-      tag: 'Wellness',
-      featuredImage: '/images/blog4.jpg',
-      createdAt: '2024-02-01'
-    },
-  ];
 
   const [formData, setFormData] = useState({
     title: '',
     tagline: '',
     description: '',
-    tag: '',
+    tags: [] as string[],
     featuredImage: ''
   });
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [newTagName, setNewTagName] = useState('');
-  const [tags, setTags] = useState<string[]>(['Weight Loss', 'Nutrition', 'Fitness', 'Wellness', 'Health Tips']);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    // In real app, fetch blog by ID from API
-    const blog = sampleBlogs.find(b => b.id === parseInt(blogId || '0'));
-    if (blog) {
-      setFormData({
-        title: blog.title,
-        tagline: blog.tagline,
-        description: blog.description,
-        tag: blog.tag,
-        featuredImage: blog.featuredImage
-      });
+    const fetchBlog = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch(`/api/blogs/${blogId}`, {
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch blog');
+        }
+
+        const data = await response.json();
+        if (data.blog) {
+          setFormData({
+            title: data.blog.title,
+            tagline: data.blog.tagline,
+            description: data.blog.description,
+            tags: data.blog.tags || [],
+            featuredImage: data.blog.featuredImage
+          });
+          setImagePreview(data.blog.featuredImage);
+        }
+      } catch (error) {
+        console.error('Error fetching blog:', error);
+        alert('Failed to load blog. Redirecting...');
+        router.push('/dashboard/blogs');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (blogId) {
+      fetchBlog();
     }
-  }, [blogId]);
+  }, [blogId, router]);
 
   const handleAddTag = () => {
-    if (newTagName.trim() && !tags.includes(newTagName.trim())) {
-      setTags([...tags, newTagName.trim()]);
-      setFormData({ ...formData, tag: newTagName.trim() });
+    if (newTagName.trim() && !formData.tags.includes(newTagName.trim())) {
+      setFormData({ ...formData, tags: [...formData.tags, newTagName.trim()] });
       setNewTagName('');
     }
   };
 
   const handleDeleteTag = (tagToDelete: string) => {
-    if (confirm(`Are you sure you want to delete the tag "${tagToDelete}"?`)) {
-      setTags(tags.filter(t => t !== tagToDelete));
-      if (formData.tag === tagToDelete) {
-        setFormData({ ...formData, tag: '' });
+    setFormData({ ...formData, tags: formData.tags.filter(t => t !== tagToDelete) });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.title || !formData.tagline || !formData.description || formData.tags.length === 0 || !formData.featuredImage) {
+      alert('Please fill in all required fields and add at least one tag');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const response = await fetch(`/api/blogs/${blogId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update blog');
       }
+
+      router.push('/dashboard/blogs');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to update blog');
+      console.error('Error updating blog:', error);
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.title || !formData.tagline || !formData.description || !formData.tag || !formData.featuredImage) {
-      alert('Please fill in all required fields');
-      return;
-    }
-    // TODO: Implement update functionality
-    console.log('Update blog:', blogId, formData);
-    router.push('/dashboard/blogs');
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <svg className="w-12 h-12 text-[#7895b3] animate-spin mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <p className="text-[#7895b3]">Loading blog...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -168,51 +172,35 @@ export default function EditBlogPage() {
           <label htmlFor="description" className="block text-sm font-medium text-[#435970] mb-2">
             Description *
           </label>
-          <textarea
-            id="description"
-            required
-            rows={6}
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            className="w-full px-4 py-2 border border-[#dfedfb] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7895b3] focus:border-transparent text-[#435970] placeholder:text-[#7895b3] resize-none"
-            placeholder="Enter blog description"
+          <RichTextEditor
+            content={formData.description}
+            onChange={(content) => setFormData({ ...formData, description: content })}
+            placeholder="Enter blog description. Use the toolbar above to format your text, add links, lists, and more."
           />
+          {!formData.description && (
+            <p className="text-xs text-red-500 mt-1">Please enter a description</p>
+          )}
         </div>
 
-        {/* Tag */}
+        {/* Tags */}
         <div>
           <label className="block text-sm font-medium text-[#435970] mb-2">
-            Tag *
+            Tags * (Add at least one tag)
           </label>
           
-          {/* Tag Tags */}
+          {/* Tags Display */}
           <div className="flex flex-wrap gap-2 mb-3 min-h-[40px] p-2 border border-[#dfedfb] rounded-lg bg-gray-50">
-            {tags.map(tag => (
+            {formData.tags.map(tag => (
               <div
                 key={tag}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  formData.tag === tag
-                    ? 'bg-[#435970] text-white'
-                    : 'bg-[#dfedfb] text-[#435970] hover:bg-[#7895b3] hover:text-white'
-                }`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-[#dfedfb] text-[#435970] transition-colors"
               >
+                <span>{tag}</span>
                 <button
                   type="button"
-                  onClick={() => setFormData({ ...formData, tag })}
-                  className="flex items-center gap-1"
-                >
-                  {tag}
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteTag(tag);
-                  }}
-                  className={`hover:opacity-80 transition-opacity ${
-                    formData.tag === tag ? 'text-white' : 'text-[#435970]'
-                  }`}
-                  title="Delete tag"
+                  onClick={() => handleDeleteTag(tag)}
+                  className="hover:opacity-80 transition-opacity text-[#435970]"
+                  title="Remove tag"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -220,7 +208,7 @@ export default function EditBlogPage() {
                 </button>
               </div>
             ))}
-            {tags.length === 0 && (
+            {formData.tags.length === 0 && (
               <span className="text-sm text-[#7895b3]">No tags yet. Add one below.</span>
             )}
           </div>
@@ -253,8 +241,8 @@ export default function EditBlogPage() {
             </button>
           </div>
           
-          {!formData.tag && (
-            <p className="text-xs text-red-500 mt-1">Please select a tag</p>
+          {formData.tags.length === 0 && (
+            <p className="text-xs text-red-500 mt-1">Please add at least one tag</p>
           )}
         </div>
 
@@ -308,9 +296,10 @@ export default function EditBlogPage() {
           </Link>
           <button
             type="submit"
-            className="px-6 py-2 bg-[#435970] text-white rounded-lg font-medium hover:bg-[#7895b3] transition-colors"
+            disabled={submitting}
+            className="px-6 py-2 bg-[#435970] text-white rounded-lg font-medium hover:bg-[#7895b3] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Update Blog
+            {submitting ? 'Updating...' : 'Update Blog'}
           </button>
         </div>
       </form>

@@ -1,4 +1,4 @@
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import { cookies } from 'next/headers';
 
 // Use a consistent secret - in production, set JWT_SECRET in .env
@@ -19,15 +19,16 @@ export interface TokenPayload {
 }
 
 export function generateToken(payload: TokenPayload): string {
-  const secret = getJwtSecret();
+  const secret: string = getJwtSecret();
+  const expiresIn: string = getJwtExpiresIn();
   return jwt.sign(payload, secret, {
-    expiresIn: getJwtExpiresIn(),
-  });
+    expiresIn: expiresIn,
+  } as SignOptions);
 }
 
 export function verifyToken(token: string): TokenPayload | null {
   try {
-    const secret = getJwtSecret();
+    const secret: string = getJwtSecret();
     const decoded = jwt.verify(token, secret) as TokenPayload;
     return decoded;
   } catch (error) {

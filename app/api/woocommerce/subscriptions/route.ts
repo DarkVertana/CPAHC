@@ -234,7 +234,6 @@ export async function GET(request: NextRequest) {
     }
 
     // Parse JSON response
-    let subscriptions;
     try {
       const responseText = await woocommerceResponse.text();
       if (!isJson) {

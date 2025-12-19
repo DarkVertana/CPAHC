@@ -15,9 +15,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find user by email
+    // Find user by email with secret tokens
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase().trim() },
+      include: {
+        secretTokens: {
+          where: {
+            isLoginToken: true,
+            isActive: true,
+          },
+        },
+      },
     });
 
     if (!user) {
@@ -60,8 +68,8 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Check if secret key is required
-    const requiresSecretKey = user.secretKeyEnabled && user.secretKey;
+    // Check if secret token is required (user has active login tokens)
+    const requiresSecretKey = user.secretTokens && user.secretTokens.length > 0;
 
     // If secret key is not required, create session immediately
     if (!requiresSecretKey) {

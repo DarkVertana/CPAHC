@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
+import RichTextEditor from '@/app/components/RichTextEditor';
 
 export default function AddBlogPage() {
   const router = useRouter();
@@ -11,39 +12,55 @@ export default function AddBlogPage() {
     title: '',
     tagline: '',
     description: '',
-    tag: '',
+    tags: [] as string[],
     featuredImage: ''
   });
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [newTagName, setNewTagName] = useState('');
-  const [tags, setTags] = useState<string[]>(['Weight Loss', 'Nutrition', 'Fitness', 'Wellness', 'Health Tips']);
 
   const handleAddTag = () => {
-    if (newTagName.trim() && !tags.includes(newTagName.trim())) {
-      setTags([...tags, newTagName.trim()]);
-      setFormData({ ...formData, tag: newTagName.trim() });
+    if (newTagName.trim() && !formData.tags.includes(newTagName.trim())) {
+      setFormData({ ...formData, tags: [...formData.tags, newTagName.trim()] });
       setNewTagName('');
     }
   };
 
   const handleDeleteTag = (tagToDelete: string) => {
-    if (confirm(`Are you sure you want to delete the tag "${tagToDelete}"?`)) {
-      setTags(tags.filter(t => t !== tagToDelete));
-      if (formData.tag === tagToDelete) {
-        setFormData({ ...formData, tag: '' });
-      }
-    }
+    setFormData({ ...formData, tags: formData.tags.filter(t => t !== tagToDelete) });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title || !formData.tagline || !formData.description || !formData.tag || !formData.featuredImage) {
-      alert('Please fill in all required fields');
+    if (!formData.title || !formData.tagline || !formData.description || formData.tags.length === 0 || !formData.featuredImage) {
+      alert('Please fill in all required fields and add at least one tag');
       return;
     }
-    // TODO: Implement create functionality
-    console.log('Create blog:', formData);
-    router.push('/dashboard/blogs');
+
+    try {
+      setSubmitting(true);
+      const response = await fetch('/api/blogs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create blog');
+      }
+
+      router.push('/dashboard/blogs');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to create blog');
+      console.error('Error creating blog:', error);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -101,51 +118,35 @@ export default function AddBlogPage() {
           <label htmlFor="description" className="block text-sm font-medium text-[#435970] mb-2">
             Description *
           </label>
-          <textarea
-            id="description"
-            required
-            rows={6}
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            className="w-full px-4 py-2 border border-[#dfedfb] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7895b3] focus:border-transparent text-[#435970] placeholder:text-[#7895b3] resize-none"
-            placeholder="Enter blog description"
+          <RichTextEditor
+            content={formData.description}
+            onChange={(content) => setFormData({ ...formData, description: content })}
+            placeholder="Enter blog description. Use the toolbar above to format your text, add links, lists, and more."
           />
+          {!formData.description && (
+            <p className="text-xs text-red-500 mt-1">Please enter a description</p>
+          )}
         </div>
 
-        {/* Tag */}
+        {/* Tags */}
         <div>
           <label className="block text-sm font-medium text-[#435970] mb-2">
-            Tag *
+            Tags * (Add at least one tag)
           </label>
           
-          {/* Tag Tags */}
+          {/* Tags Display */}
           <div className="flex flex-wrap gap-2 mb-3 min-h-[40px] p-2 border border-[#dfedfb] rounded-lg bg-gray-50">
-            {tags.map(tag => (
+            {formData.tags.map(tag => (
               <div
                 key={tag}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  formData.tag === tag
-                    ? 'bg-[#435970] text-white'
-                    : 'bg-[#dfedfb] text-[#435970] hover:bg-[#7895b3] hover:text-white'
-                }`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-[#dfedfb] text-[#435970] transition-colors"
               >
+                <span>{tag}</span>
                 <button
                   type="button"
-                  onClick={() => setFormData({ ...formData, tag })}
-                  className="flex items-center gap-1"
-                >
-                  {tag}
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteTag(tag);
-                  }}
-                  className={`hover:opacity-80 transition-opacity ${
-                    formData.tag === tag ? 'text-white' : 'text-[#435970]'
-                  }`}
-                  title="Delete tag"
+                  onClick={() => handleDeleteTag(tag)}
+                  className="hover:opacity-80 transition-opacity text-[#435970]"
+                  title="Remove tag"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -153,7 +154,7 @@ export default function AddBlogPage() {
                 </button>
               </div>
             ))}
-            {tags.length === 0 && (
+            {formData.tags.length === 0 && (
               <span className="text-sm text-[#7895b3]">No tags yet. Add one below.</span>
             )}
           </div>
@@ -186,8 +187,8 @@ export default function AddBlogPage() {
             </button>
           </div>
           
-          {!formData.tag && (
-            <p className="text-xs text-red-500 mt-1">Please select a tag</p>
+          {formData.tags.length === 0 && (
+            <p className="text-xs text-red-500 mt-1">Please add at least one tag</p>
           )}
         </div>
 
@@ -242,9 +243,10 @@ export default function AddBlogPage() {
           </Link>
           <button
             type="submit"
-            className="px-6 py-2 bg-[#435970] text-white rounded-lg font-medium hover:bg-[#7895b3] transition-colors"
+            disabled={submitting}
+            className="px-6 py-2 bg-[#435970] text-white rounded-lg font-medium hover:bg-[#7895b3] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Create Blog
+            {submitting ? 'Creating...' : 'Create Blog'}
           </button>
         </div>
       </form>

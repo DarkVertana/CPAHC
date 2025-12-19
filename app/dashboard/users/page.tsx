@@ -273,8 +273,12 @@ export default function UsersPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-[#435970]">
-                      <span className="font-semibold">{user.weight}</span>
-                      <span className="text-[#7895b3]"> / {user.goal}</span>
+                      <span className="font-semibold">
+                        {user.weight === 'N/A' ? 'N/A' : `${user.weight} lbs`}
+                      </span>
+                      <span className="text-[#7895b3]">
+                        {user.goal !== 'N/A' ? ` / ${user.goal} lbs` : ' / N/A'}
+                      </span>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -421,11 +425,15 @@ export default function UsersPage() {
                   <div className="space-y-3">
                     <div>
                       <p className="text-xs text-[#7895b3] mb-1">Current Weight</p>
-                      <p className="text-sm font-medium text-[#435970]">{selectedUser.weight}</p>
+                      <p className="text-sm font-medium text-[#435970]">
+                        {selectedUser.weight === 'N/A' ? 'N/A' : `${selectedUser.weight} lbs`}
+                      </p>
                     </div>
                     <div>
                       <p className="text-xs text-[#7895b3] mb-1">Goal Weight</p>
-                      <p className="text-sm font-medium text-[#435970]">{selectedUser.goal}</p>
+                      <p className="text-sm font-medium text-[#435970]">
+                        {selectedUser.goal === 'N/A' ? 'N/A' : `${selectedUser.goal} lbs`}
+                      </p>
                     </div>
                     {selectedUser.totalWorkouts !== undefined && (
                       <div>

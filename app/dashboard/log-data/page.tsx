@@ -1,43 +1,96 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 type WeightLog = {
-  id: number;
-  userId: number;
-  userName: string;
+  id: string;
+  userId: string;
+  userName: string | null;
   userEmail: string;
   date: string;
-  weight: number; // in lbs
-  previousWeight?: number;
-  change: number; // change in lbs
-  changeType: 'increase' | 'decrease' | 'no-change';
+  weight: number;
+  previousWeight: number | null;
+  change: number | null;
+  changeType: 'increase' | 'decrease' | 'no-change' | null;
+};
+
+type WeightLogsResponse = {
+  logs: WeightLog[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  stats: {
+    total: number;
+    uniqueUsers: number;
+    avgWeightLoss: number;
+    todayLogs: number;
+  };
 };
 
 export default function LogDataPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    total: 0,
+    uniqueUsers: 0,
+    avgWeightLoss: 0,
+    todayLogs: 0,
+  });
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 50,
+    total: 0,
+    totalPages: 1,
+  });
 
-  // Sample weight log data
-  const weightLogs: WeightLog[] = [
-    { id: 1, userId: 1, userName: 'Sarah Johnson', userEmail: 'sarah.j@example.com', date: '2024-01-15', weight: 150.5, previousWeight: 152.0, change: -1.5, changeType: 'decrease' },
-    { id: 2, userId: 1, userName: 'Sarah Johnson', userEmail: 'sarah.j@example.com', date: '2024-01-16', weight: 149.8, previousWeight: 150.5, change: -0.7, changeType: 'decrease' },
-    { id: 3, userId: 1, userName: 'Sarah Johnson', userEmail: 'sarah.j@example.com', date: '2024-01-17', weight: 149.2, previousWeight: 149.8, change: -0.6, changeType: 'decrease' },
-    { id: 4, userId: 2, userName: 'Michael Chen', userEmail: 'm.chen@example.com', date: '2024-01-15', weight: 180.0, previousWeight: 181.5, change: -1.5, changeType: 'decrease' },
-    { id: 5, userId: 2, userName: 'Michael Chen', userEmail: 'm.chen@example.com', date: '2024-01-16', weight: 179.5, previousWeight: 180.0, change: -0.5, changeType: 'decrease' },
-    { id: 6, userId: 3, userName: 'Emily Rodriguez', userEmail: 'emily.r@example.com', date: '2024-01-15', weight: 128.0, previousWeight: 127.5, change: 0.5, changeType: 'increase' },
-    { id: 7, userId: 3, userName: 'Emily Rodriguez', userEmail: 'emily.r@example.com', date: '2024-01-16', weight: 128.5, previousWeight: 128.0, change: 0.5, changeType: 'increase' },
-    { id: 8, userId: 4, userName: 'David Kim', userEmail: 'david.k@example.com', date: '2024-01-15', weight: 165.0, previousWeight: 166.0, change: -1.0, changeType: 'decrease' },
-    { id: 9, userId: 5, userName: 'Lisa Anderson', userEmail: 'lisa.a@example.com', date: '2024-01-15', weight: 154.0, previousWeight: 154.0, change: 0, changeType: 'no-change' },
-    { id: 10, userId: 5, userName: 'Lisa Anderson', userEmail: 'lisa.a@example.com', date: '2024-01-16', weight: 153.5, previousWeight: 154.0, change: -0.5, changeType: 'decrease' },
-    { id: 11, userId: 7, userName: 'Maria Garcia', userEmail: 'maria.g@example.com', date: '2024-01-15', weight: 139.0, previousWeight: 140.0, change: -1.0, changeType: 'decrease' },
-    { id: 12, userId: 8, userName: 'Robert Taylor', userEmail: 'robert.t@example.com', date: '2024-01-15', weight: 174.0, previousWeight: 175.5, change: -1.5, changeType: 'decrease' },
-    { id: 13, userId: 10, userName: 'Christopher Lee', userEmail: 'chris.l@example.com', date: '2024-01-15', weight: 187.0, previousWeight: 188.0, change: -1.0, changeType: 'decrease' },
-    { id: 14, userId: 10, userName: 'Christopher Lee', userEmail: 'chris.l@example.com', date: '2024-01-16', weight: 186.5, previousWeight: 187.0, change: -0.5, changeType: 'decrease' },
-  ];
+  // Fetch weight logs from API
+  useEffect(() => {
+    const fetchWeightLogs = async () => {
+      try {
+        setLoading(true);
+        const params = new URLSearchParams({
+          page: pagination.page.toString(),
+          limit: pagination.limit.toString(),
+        });
+
+        if (searchTerm) {
+          params.append('search', searchTerm);
+        }
+
+        if (selectedDate) {
+          params.append('date', selectedDate);
+        }
+
+        const response = await fetch(`/api/weight-logs?${params.toString()}`, {
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch weight logs');
+        }
+
+        const data: WeightLogsResponse = await response.json();
+        setWeightLogs(data.logs);
+        setStats(data.stats);
+        setPagination(data.pagination);
+      } catch (error) {
+        console.error('Error fetching weight logs:', error);
+        alert('Failed to load weight logs');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchWeightLogs();
+  }, [searchTerm, selectedDate, pagination.page, pagination.limit]);
 
   const filteredLogs = weightLogs.filter(log =>
-    log.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (log.userName?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
     log.userEmail.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -48,7 +101,13 @@ export default function LogDataPage() {
     }
     acc[log.userId].push(log);
     return acc;
-  }, {} as Record<number, WeightLog[]>);
+  }, {} as Record<string, WeightLog[]>);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= pagination.totalPages) {
+      setPagination({ ...pagination, page: newPage });
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -89,27 +148,22 @@ export default function LogDataPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-lg p-4 border border-[#dfedfb]">
           <p className="text-sm text-[#7895b3] mb-1">Total Logs</p>
-          <p className="text-2xl font-bold text-[#435970]">{weightLogs.length}</p>
+          <p className="text-2xl font-bold text-[#435970]">{stats.total}</p>
         </div>
         <div className="bg-white rounded-lg p-4 border border-[#dfedfb]">
           <p className="text-sm text-[#7895b3] mb-1">Users Logging</p>
-          <p className="text-2xl font-bold text-[#435970]">{Object.keys(logsByUser).length}</p>
+          <p className="text-2xl font-bold text-[#435970]">{stats.uniqueUsers}</p>
         </div>
         <div className="bg-white rounded-lg p-4 border border-[#dfedfb]">
           <p className="text-sm text-[#7895b3] mb-1">Avg Weight Loss</p>
           <p className="text-2xl font-bold text-[#435970]">
-            {(
-              weightLogs
-                .filter(log => log.changeType === 'decrease')
-                .reduce((sum, log) => sum + Math.abs(log.change), 0) /
-              weightLogs.filter(log => log.changeType === 'decrease').length || 0
-            ).toFixed(1)} lbs
+            {stats.avgWeightLoss.toFixed(1)} lbs
           </p>
         </div>
         <div className="bg-white rounded-lg p-4 border border-[#dfedfb]">
           <p className="text-sm text-[#7895b3] mb-1">Today's Logs</p>
           <p className="text-2xl font-bold text-[#435970]">
-            {weightLogs.filter(log => log.date === selectedDate).length}
+            {stats.todayLogs}
           </p>
         </div>
       </div>
@@ -141,87 +195,134 @@ export default function LogDataPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#dfedfb]">
-              {filteredLogs
-                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                .map((log) => (
-                  <tr key={log.id} className="hover:bg-[#dfedfb]/20 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="w-10 h-10 bg-[#435970] rounded-full flex items-center justify-center text-white font-semibold text-sm mr-3">
-                          {log.userName.split(' ').map(n => n[0]).join('')}
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center">
+                    <div className="flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#435970]"></div>
+                      <span className="ml-3 text-[#7895b3]">Loading weight logs...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center">
+                    <p className="text-[#7895b3]">
+                      {searchTerm || selectedDate
+                        ? 'No weight logs found matching your criteria.'
+                        : 'No weight logs found. Weight logs will appear here when users submit data from the app.'}
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                filteredLogs
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                  .map((log) => (
+                    <tr key={log.id} className="hover:bg-[#dfedfb]/20 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="w-10 h-10 bg-[#435970] rounded-full flex items-center justify-center text-white font-semibold text-sm mr-3">
+                            {log.userName
+                              ? log.userName.split(' ').map(n => n[0]).join('').toUpperCase()
+                              : log.userEmail[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="text-sm font-semibold text-[#435970]">
+                              {log.userName || log.userEmail.split('@')[0]}
+                            </div>
+                            <div className="text-sm text-[#7895b3]">{log.userEmail}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-sm font-semibold text-[#435970]">{log.userName}</div>
-                          <div className="text-sm text-[#7895b3]">{log.userEmail}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-[#435970]">
-                      {new Date(log.date).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-semibold text-[#435970]">{log.weight} lbs</span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-[#7895b3]">
-                      {log.previousWeight ? `${log.previousWeight} lbs` : 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {log.change !== 0 ? (
-                        <div className="flex items-center gap-2">
-                          {log.changeType === 'decrease' ? (
-                            <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                            </svg>
-                          ) : (
-                            <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7 7V3" />
-                            </svg>
-                          )}
-                          <span className={`text-sm font-semibold ${
-                            log.changeType === 'decrease' ? 'text-green-600' : 'text-red-600'
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-[#435970]">
+                        {new Date(log.date).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="text-sm font-semibold text-[#435970]">{log.weight} lbs</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-[#7895b3]">
+                        {log.previousWeight ? `${log.previousWeight} lbs` : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {log.change !== null && log.change !== 0 ? (
+                          <div className="flex items-center gap-2">
+                            {log.changeType === 'decrease' ? (
+                              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                              </svg>
+                            ) : (
+                              <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7 7V3" />
+                              </svg>
+                            )}
+                            <span className={`text-sm font-semibold ${
+                              log.changeType === 'decrease' ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              {log.changeType === 'decrease' ? '-' : '+'}{Math.abs(log.change)} lbs
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-[#7895b3]">No change</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {log.changeType ? (
+                          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                            log.changeType === 'decrease'
+                              ? 'bg-green-100 text-green-700'
+                              : log.changeType === 'increase'
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-[#dfedfb] text-[#7895b3]'
                           }`}>
-                            {log.changeType === 'decrease' ? '-' : '+'}{Math.abs(log.change)} lbs
+                            {log.changeType === 'decrease' ? 'Decreased' : log.changeType === 'increase' ? 'Increased' : 'No Change'}
                           </span>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-[#7895b3]">No change</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        log.changeType === 'decrease'
-                          ? 'bg-green-100 text-green-700'
-                          : log.changeType === 'increase'
-                          ? 'bg-red-100 text-red-700'
-                          : 'bg-[#dfedfb] text-[#7895b3]'
-                      }`}>
-                        {log.changeType === 'decrease' ? 'Decreased' : log.changeType === 'increase' ? 'Increased' : 'No Change'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                        ) : (
+                          <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-[#dfedfb] text-[#7895b3]">
+                            N/A
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+              )}
             </tbody>
           </table>
         </div>
 
         {/* Pagination */}
-        <div className="px-6 py-4 border-t border-[#dfedfb] flex items-center justify-between">
-          <div className="text-sm text-[#7895b3]">
-            Showing <span className="font-semibold text-[#435970]">1</span> to{' '}
-            <span className="font-semibold text-[#435970]">{filteredLogs.length}</span> of{' '}
-            <span className="font-semibold text-[#435970]">{weightLogs.length}</span> logs
+        {!loading && filteredLogs.length > 0 && (
+          <div className="px-6 py-4 border-t border-[#dfedfb] flex items-center justify-between">
+            <div className="text-sm text-[#7895b3]">
+              Showing <span className="font-semibold text-[#435970]">
+                {((pagination.page - 1) * pagination.limit) + 1}
+              </span> to{' '}
+              <span className="font-semibold text-[#435970]">
+                {Math.min(pagination.page * pagination.limit, pagination.total)}
+              </span> of{' '}
+              <span className="font-semibold text-[#435970]">{pagination.total}</span> logs
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handlePageChange(pagination.page - 1)}
+                disabled={pagination.page === 1}
+                className="px-3 py-1 text-sm border border-[#dfedfb] rounded-lg text-[#435970] hover:bg-[#dfedfb] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <span className="text-sm text-[#7895b3]">
+                Page {pagination.page} of {pagination.totalPages}
+              </span>
+              <button
+                onClick={() => handlePageChange(pagination.page + 1)}
+                disabled={pagination.page >= pagination.totalPages}
+                className="px-3 py-1 text-sm border border-[#dfedfb] rounded-lg text-[#435970] hover:bg-[#dfedfb] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button className="px-3 py-1 text-sm border border-[#dfedfb] rounded-lg text-[#435970] hover:bg-[#dfedfb] transition-colors">
-              Previous
-            </button>
-            <button className="px-3 py-1 text-sm border border-[#dfedfb] rounded-lg text-[#435970] hover:bg-[#dfedfb] transition-colors">
-              Next
-            </button>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
 }
-

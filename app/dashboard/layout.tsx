@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 
-export default function DashboardLayout({
+function DashboardLayoutContent({
   children,
 }: {
   children: React.ReactNode;
@@ -308,7 +308,7 @@ export default function DashboardLayout({
         {/* Top Bar */}
         <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-end">
           <div className="flex items-center gap-4">
-            {/* Notifications */}
+            {/* Active Bandage */}
             <button className="relative p-2 hover:bg-gray-100 rounded-lg transition-colors">
               <svg
                 className="w-6 h-6 text-[#435970]"
@@ -320,10 +320,11 @@ export default function DashboardLayout({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
                 />
+                <circle cx="12" cy="12" r="10" strokeWidth={2} />
               </svg>
-              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-[#7895b3] rounded-full border-2 border-white"></span>
+              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></span>
             </button>
 
             {/* User Profile */}
@@ -358,6 +359,24 @@ export default function DashboardLayout({
         </div>
       </main>
     </div>
+  );
+}
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <Suspense fallback={
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#435970] mx-auto"></div>
+          <p className="mt-4 text-[#7895b3]">Loading...</p>
+        </div>
+      </div>
+    }>
+      <DashboardLayoutContent>{children}</DashboardLayoutContent>
+    </Suspense>
   );
 }
 
