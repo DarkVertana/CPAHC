@@ -373,3 +373,351 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * Cancel or Manage WooCommerce Subscription Endpoint
+ * 
+ * This endpoint cancels, pauses, resumes, or updates a subscription in WooCommerce.
+ * 
+ * Request Body:
+ * - subscriptionId: Subscription ID (required)
+ * - email: User email for verification (required)
+ * - action: Action to perform - 'cancel', 'pause', 'resume', 'update' (required)
+ * - updateData: Optional data for update action (only for 'update' action)
+ * 
+ * Security:
+ * - Requires valid API key in request headers
+ * - API key can be sent as 'X-API-Key' header or 'Authorization: Bearer <key>'
+ * 
+ * Returns:
+ * - Updated subscription details
+ */
+export async function POST(request: NextRequest) {
+  try {
+    // Validate API key
+    let apiKey;
+    try {
+      apiKey = await validateApiKey(request);
+    } catch (apiKeyError) {
+      console.error('API key validation error:', apiKeyError);
+      return NextResponse.json(
+        { error: 'API key validation failed', details: process.env.NODE_ENV === 'development' ? (apiKeyError instanceof Error ? apiKeyError.message : 'Unknown error') : undefined },
+        { status: 500 }
+      );
+    }
+    
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'Unauthorized. Valid API key required.' },
+        { status: 401 }
+      );
+    }
+
+    // Get request body
+    const body = await request.json();
+    const { subscriptionId, email, action, updateData } = body;
+
+    // Validate required fields
+    if (!subscriptionId) {
+      return NextResponse.json(
+        { error: 'Subscription ID is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!email) {
+      return NextResponse.json(
+        { error: 'Email is required for subscription verification' },
+        { status: 400 }
+      );
+    }
+
+    if (!action) {
+      return NextResponse.json(
+        { error: 'Action is required. Valid actions: cancel, pause, resume, update' },
+        { status: 400 }
+      );
+    }
+
+    const validActions = ['cancel', 'pause', 'resume', 'update'];
+    if (!validActions.includes(action.toLowerCase())) {
+      return NextResponse.json(
+        { error: `Invalid action. Valid actions are: ${validActions.join(', ')}` },
+        { status: 400 }
+      );
+    }
+
+    // Normalize email
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Get WooCommerce settings from database
+    const settings = await prisma.settings.findUnique({
+      where: { id: 'settings' },
+    });
+
+    if (!settings || !settings.woocommerceApiUrl || !settings.woocommerceApiKey || !settings.woocommerceApiSecret) {
+      return NextResponse.json(
+        { error: 'WooCommerce API credentials are not configured. Please configure them in the admin settings.' },
+        { status: 500 }
+      );
+    }
+
+    // Prepare WooCommerce API URL
+    let apiUrl = settings.woocommerceApiUrl.replace(/\/$/, '');
+    
+    if (!apiUrl.includes('/wp-json/wc/')) {
+      const baseUrl = apiUrl.replace(/\/wp-json.*$/, '');
+      apiUrl = `${baseUrl}/wp-json/wc/v3`;
+      console.warn(`WooCommerce API URL was missing /wp-json/wc/ path. Auto-corrected to: ${apiUrl}`);
+    }
+    
+    if (!apiUrl.includes('/wp-json/wc/')) {
+      return NextResponse.json(
+        {
+          error: 'Invalid WooCommerce API URL format',
+          details: process.env.NODE_ENV === 'development' 
+            ? `The API URL "${settings.woocommerceApiUrl}" is invalid. It should be in the format: https://yourstore.com/wp-json/wc/v3` 
+            : 'Please check your WooCommerce API URL in admin settings.',
+        },
+        { status: 400 }
+      );
+    }
+
+    // Create Basic Auth header for WooCommerce API
+    const authString = Buffer.from(
+      `${settings.woocommerceApiKey}:${settings.woocommerceApiSecret}`
+    ).toString('base64');
+
+    const authHeaders = {
+      'Authorization': `Basic ${authString}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+
+    // First, verify the subscription exists and belongs to the user
+    let subscriptionUrl = `${apiUrl}/subscriptions/${subscriptionId}`;
+    
+    // Try v3 endpoint first
+    let subscriptionResponse = await fetch(subscriptionUrl, {
+      method: 'GET',
+      headers: authHeaders,
+    });
+
+    // If v3 doesn't work, try v1
+    if (!subscriptionResponse.ok && subscriptionResponse.status === 404) {
+      const apiUrlV1 = apiUrl.replace('/wc/v3', '/wc/v1');
+      subscriptionUrl = `${apiUrlV1}/subscriptions/${subscriptionId}`;
+      subscriptionResponse = await fetch(subscriptionUrl, {
+        method: 'GET',
+        headers: authHeaders,
+      });
+    }
+
+    // Check if response is JSON
+    const subscriptionContentType = subscriptionResponse.headers.get('content-type');
+    const isSubscriptionJson = subscriptionContentType && subscriptionContentType.includes('application/json');
+
+    if (!subscriptionResponse.ok) {
+      const errorText = await subscriptionResponse.text();
+      
+      if (!isSubscriptionJson && errorText.includes('<!DOCTYPE')) {
+        return NextResponse.json(
+          {
+            error: 'WooCommerce API returned an HTML page instead of JSON',
+            details: process.env.NODE_ENV === 'development' 
+              ? 'Please check your WooCommerce API URL and credentials.' 
+              : undefined,
+          },
+          { status: 500 }
+        );
+      }
+
+      if (subscriptionResponse.status === 404) {
+        return NextResponse.json(
+          { error: 'Subscription not found' },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          error: 'Failed to fetch subscription from WooCommerce',
+          details: process.env.NODE_ENV === 'development' 
+            ? `WooCommerce API returned ${subscriptionResponse.status}: ${subscriptionResponse.statusText}` 
+            : undefined,
+        },
+        { status: subscriptionResponse.status || 500 }
+      );
+    }
+
+    // Parse subscription data
+    let subscription;
+    try {
+      const subscriptionText = await subscriptionResponse.text();
+      if (!isSubscriptionJson) {
+        return NextResponse.json(
+          {
+            error: 'WooCommerce API returned an invalid response format',
+            details: process.env.NODE_ENV === 'development' 
+              ? 'The API returned HTML or non-JSON content.' 
+              : undefined,
+          },
+          { status: 500 }
+        );
+      }
+      subscription = JSON.parse(subscriptionText);
+    } catch (parseError) {
+      console.error('Failed to parse subscription response:', parseError);
+      return NextResponse.json(
+        {
+          error: 'Failed to parse response from WooCommerce API',
+          details: process.env.NODE_ENV === 'development' && parseError instanceof Error
+            ? parseError.message
+            : undefined,
+        },
+        { status: 500 }
+      );
+    }
+
+    // Verify the subscription belongs to the user
+    const subscriptionEmail = (
+      subscription.billing?.email?.toLowerCase().trim() ||
+      subscription.customer_email?.toLowerCase().trim() ||
+      ''
+    );
+    if (subscriptionEmail !== normalizedEmail) {
+      return NextResponse.json(
+        { error: 'Subscription does not belong to this user' },
+        { status: 403 }
+      );
+    }
+
+    // Prepare update payload based on action
+    let updatePayload: any = {};
+    const actionLower = action.toLowerCase();
+
+    if (actionLower === 'cancel') {
+      // Cancel subscription - set status to cancelled
+      updatePayload = { status: 'cancelled' };
+    } else if (actionLower === 'pause') {
+      // Pause subscription - set status to on-hold
+      updatePayload = { status: 'on-hold' };
+    } else if (actionLower === 'resume') {
+      // Resume subscription - set status to active
+      updatePayload = { status: 'active' };
+    } else if (actionLower === 'update') {
+      // Update subscription with provided data
+      if (!updateData || typeof updateData !== 'object') {
+        return NextResponse.json(
+          { error: 'updateData is required for update action' },
+          { status: 400 }
+        );
+      }
+      updatePayload = updateData;
+    }
+
+    // Update the subscription
+    const updateResponse = await fetch(subscriptionUrl, {
+      method: 'PUT',
+      headers: authHeaders,
+      body: JSON.stringify(updatePayload),
+    });
+
+    // Check if response is JSON
+    const updateContentType = updateResponse.headers.get('content-type');
+    const isUpdateJson = updateContentType && updateContentType.includes('application/json');
+
+    if (!updateResponse.ok) {
+      const errorText = await updateResponse.text();
+      console.error('WooCommerce update subscription error:', {
+        status: updateResponse.status,
+        statusText: updateResponse.statusText,
+        error: errorText.substring(0, 500),
+      });
+
+      if (!isUpdateJson && errorText.includes('<!DOCTYPE')) {
+        return NextResponse.json(
+          {
+            error: 'WooCommerce API returned an HTML page instead of JSON',
+            details: process.env.NODE_ENV === 'development' 
+              ? 'Please check your WooCommerce API URL and credentials.' 
+              : undefined,
+          },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          error: `Failed to ${action} subscription in WooCommerce`,
+          details: process.env.NODE_ENV === 'development' 
+            ? `WooCommerce API returned ${updateResponse.status}: ${updateResponse.statusText}` 
+            : undefined,
+        },
+        { status: updateResponse.status || 500 }
+      );
+    }
+
+    // Parse updated subscription response
+    let updatedSubscription;
+    try {
+      const updateText = await updateResponse.text();
+      if (!isUpdateJson) {
+        return NextResponse.json(
+          {
+            error: 'WooCommerce API returned an invalid response format',
+            details: process.env.NODE_ENV === 'development' 
+              ? 'The API returned HTML or non-JSON content.' 
+              : undefined,
+          },
+          { status: 500 }
+        );
+      }
+      updatedSubscription = JSON.parse(updateText);
+    } catch (parseError) {
+      console.error('Failed to parse update subscription response:', parseError);
+      return NextResponse.json(
+        {
+          error: 'Failed to parse response from WooCommerce API',
+          details: process.env.NODE_ENV === 'development' && parseError instanceof Error
+            ? parseError.message
+            : undefined,
+        },
+        { status: 500 }
+      );
+    }
+
+    // Enrich subscription with all status fields
+    const enrichedSubscription = {
+      ...updatedSubscription,
+      status: updatedSubscription.status || 'unknown',
+      date_created: updatedSubscription.date_created || updatedSubscription.date_created_gmt || null,
+      date_modified: updatedSubscription.date_modified || updatedSubscription.date_modified_gmt || null,
+      next_payment_date: updatedSubscription.next_payment_date || updatedSubscription.next_payment_date_gmt || null,
+      end_date: updatedSubscription.end_date || updatedSubscription.end_date_gmt || null,
+      trial_end_date: updatedSubscription.trial_end_date || updatedSubscription.trial_end_date_gmt || null,
+    };
+
+    return NextResponse.json({
+      success: true,
+      message: `Subscription ${action}d successfully`,
+      subscription: enrichedSubscription,
+    });
+  } catch (error) {
+    console.error('Manage WooCommerce subscription error:', error);
+    
+    const errorMessage = process.env.NODE_ENV === 'development' && error instanceof Error
+      ? error.message
+      : 'An error occurred while managing the subscription';
+
+    return NextResponse.json(
+      { 
+        error: errorMessage,
+        details: process.env.NODE_ENV === 'development' && error instanceof Error
+          ? error.stack
+          : undefined
+      },
+      { status: 500 }
+    );
+  }
+}
+

@@ -983,7 +983,84 @@ GET /api/woocommerce/subscriptions?email=user@example.com
 
 ---
 
-#### 14. Get WooCommerce Billing Address
+#### 14. Cancel or Manage WooCommerce Subscription
+
+Cancel, pause, resume, or update a subscription in WooCommerce.
+
+**Endpoint:** `POST /api/woocommerce/subscriptions`
+
+**Headers:**
+```http
+Content-Type: application/json
+X-API-Key: ahc_live_sk_your_api_key_here
+```
+
+**Request Body:**
+```json
+{
+  "subscriptionId": 789,
+  "email": "user@example.com",
+  "action": "cancel"
+}
+```
+
+**Required Fields:**
+- `subscriptionId` (number): WooCommerce subscription ID
+- `email` (string): User email for verification
+- `action` (string): Action to perform - `cancel`, `pause`, `resume`, or `update`
+
+**Available Actions:**
+- `cancel`: Cancels the subscription (sets status to "cancelled")
+- `pause`: Pauses the subscription (sets status to "on-hold")
+- `resume`: Resumes the subscription (sets status to "active")
+- `update`: Updates subscription with custom data (requires `updateData` field)
+
+**Update Action Example:**
+```json
+{
+  "subscriptionId": 789,
+  "email": "user@example.com",
+  "action": "update",
+  "updateData": {
+    "billing_period": "year",
+    "billing_interval": 1,
+    "next_payment_date": "2025-01-01T00:00:00"
+  }
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Subscription cancelled successfully",
+  "subscription": {
+    "id": 789,
+    "status": "cancelled",
+    "date_created": "2024-01-01T00:00:00",
+    "date_modified": "2024-01-15T10:30:00",
+    "next_payment_date": null,
+    "end_date": "2024-01-15T10:30:00",
+    ...
+  }
+}
+```
+
+**Important Notes:**
+- Requires WooCommerce Subscriptions plugin to be installed
+- Subscription must belong to the specified email
+- All subscription statuses are included in the response
+
+**Error Responses:**
+- `400 Bad Request`: Missing required fields or invalid action
+- `401 Unauthorized`: Invalid or missing API key
+- `403 Forbidden`: Subscription does not belong to the specified email
+- `404 Not Found`: Subscription not found
+- `500 Internal Server Error`: WooCommerce API error or configuration issue
+
+---
+
+#### 15. Get WooCommerce Billing Address
 
 Retrieve billing address for a customer by email.
 
@@ -1037,7 +1114,7 @@ GET /api/woocommerce/billing-address?email=user@example.com
 
 ---
 
-#### 15. Update WooCommerce Billing Address
+#### 16. Update WooCommerce Billing Address
 
 Update billing address for a customer by email.
 
