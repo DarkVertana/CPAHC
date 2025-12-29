@@ -220,6 +220,57 @@ GET /api/app-users/get?email=user@example.com
 - `401 Unauthorized`: Invalid or missing API key
 - `404 Not Found`: User not found
 
+**Important Notes:**
+- The endpoint automatically tracks and resets daily task status
+- Task status resets at midnight (new day)
+- `tasksToday` field shows the count of completed tasks (0-3)
+- `taskStatus` field contains: `{ date: "YYYY-MM-DD", tasks: [boolean, boolean, boolean] }` - tracks 3 tasks completion for the day
+
+---
+
+#### 3. Get Task Status
+
+Retrieve the current task status for a user. Tasks reset daily and there are 3 tasks per day.
+
+**Endpoint:** `GET /api/app-users/get`
+
+**Note:** This is the same endpoint as "Get User" above. The task status is automatically included in the user response. The system automatically:
+- Resets task status to all incomplete (false) for a new day
+- Updates `tasksToday` count based on completed tasks
+- Returns the current task status in the `taskStatus` field
+
+**Response includes task status:**
+```json
+{
+  "success": true,
+  "user": {
+    "id": "clx123abc",
+    "wpUserId": "123",
+    "email": "user@example.com",
+    "tasksToday": 2,
+    "taskStatus": {
+      "date": "2024-01-15",
+      "tasks": [true, true, false]
+    },
+    ...
+  }
+}
+```
+
+**Task Status Fields:**
+- `date` (string): The date these tasks are for (YYYY-MM-DD format)
+- `tasks` (array of booleans): Array of 3 boolean values indicating task completion
+  - `tasks[0]`: First task completion status
+  - `tasks[1]`: Second task completion status
+  - `tasks[2]`: Third task completion status
+- `tasksToday` (number): Count of completed tasks (0-3)
+
+**Important Notes:**
+- Tasks automatically reset at midnight (new day)
+- If `taskStatus` is null or the date doesn't match today, it will be reset automatically
+- The `tasksToday` field is automatically updated to match the number of completed tasks
+- All 3 tasks are the same every day and reset daily
+
 ---
 
 ### Weight Logs
@@ -801,9 +852,183 @@ DELETE /api/app-users/fcm-token?email=user@example.com
 
 ---
 
+### Medication Logs
+
+#### 11. Get Medication Logs
+
+Retrieve medication logs for a user, organized by weeks (last 4 weeks).
+
+**Endpoint:** `GET /api/app-users/medication-log`
+
+**Headers:**
+```http
+X-API-Key: ahc_live_sk_your_api_key_here
+```
+
+**Query Parameters:**
+- `wpUserId` (string, optional): WordPress user ID
+- `email` (string, optional): User email address
+
+**Note:** At least one of `wpUserId` or `email` must be provided.
+
+**Example Request:**
+```http
+GET /api/app-users/medication-log?wpUserId=123
+GET /api/app-users/medication-log?email=user@example.com
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "weeks": [
+    {
+      "week": 1,
+      "startDate": "2024-01-22",
+      "endDate": "2024-01-28",
+      "logs": [
+        {
+          "id": "clx789ghi",
+          "medicineName": "Vitamin D",
+          "dosage": "1000 IU",
+          "takenAt": "2024-01-25T08:30:00.000Z"
+        },
+        {
+          "id": "clx790hij",
+          "medicineName": "Multivitamin",
+          "dosage": "1 tablet",
+          "takenAt": "2024-01-26T09:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "week": 2,
+      "startDate": "2024-01-15",
+      "endDate": "2024-01-21",
+      "logs": [
+        {
+          "id": "clx791ijk",
+          "medicineName": "Vitamin D",
+          "dosage": "1000 IU",
+          "takenAt": "2024-01-18T08:30:00.000Z"
+        }
+      ]
+    },
+    {
+      "week": 3,
+      "startDate": "2024-01-08",
+      "endDate": "2024-01-14",
+      "logs": []
+    },
+    {
+      "week": 4,
+      "startDate": "2024-01-01",
+      "endDate": "2024-01-07",
+      "logs": []
+    }
+  ],
+  "totalLogs": 3
+}
+```
+
+**Response Fields:**
+- `weeks` (array): Array of 4 week objects (most recent week first)
+  - `week` (number): Week number (1-4, where 1 is the most recent week)
+  - `startDate` (string): Start date of the week (YYYY-MM-DD)
+  - `endDate` (string): End date of the week (YYYY-MM-DD)
+  - `logs` (array): Array of medication log entries for that week
+    - `id` (string): Log entry ID
+    - `medicineName` (string): Name of the medicine
+    - `dosage` (string): Dosage information
+    - `takenAt` (string): ISO 8601 timestamp when medicine was taken
+- `totalLogs` (number): Total number of logs across all 4 weeks
+
+**Important Notes:**
+- Returns medication logs for the last 4 weeks only
+- Weeks are organized from most recent (week 1) to oldest (week 4)
+- Each week spans 7 days
+- Empty weeks will have an empty `logs` array
+- Logs are sorted by `takenAt` in descending order (most recent first)
+
+**Error Responses:**
+- `400 Bad Request`: Missing both wpUserId and email parameters
+- `401 Unauthorized`: Invalid or missing API key
+- `404 Not Found`: User not found
+- `500 Internal Server Error`: Server error
+
+---
+
+#### 12. Log Medication
+
+Log when a user takes medication with dosage and time information.
+
+**Endpoint:** `POST /api/app-users/medication-log`
+
+**Headers:**
+```http
+Content-Type: application/json
+X-API-Key: ahc_live_sk_your_api_key_here
+```
+
+**Request Body:**
+```json
+{
+  "wpUserId": "123",
+  "email": "user@example.com",
+  "medicineId": "clx123abc",
+  "medicineName": "Vitamin D",
+  "dosage": "1000 IU",
+  "takenAt": "2024-01-25T08:30:00.000Z"
+}
+```
+
+**Required Fields:**
+- `medicineName` (string): Name of the medicine
+- `dosage` (string): Dosage information (e.g., "1000 IU", "1 tablet", "500mg")
+
+**Optional Fields:**
+- `wpUserId` (string): WordPress user ID (required if email not provided)
+- `email` (string): User email address (required if wpUserId not provided)
+- `medicineId` (string): Optional reference to Medicine ID from the medicines API
+- `takenAt` (string, ISO 8601): Timestamp when medicine was taken (defaults to current time if not provided)
+
+**Note:** At least one of `wpUserId` or `email` must be provided.
+
+**Response (201 Created):**
+```json
+{
+  "success": true,
+  "log": {
+    "id": "clx789ghi",
+    "appUserId": "clx123abc",
+    "medicineId": "clx123abc",
+    "medicineName": "Vitamin D",
+    "dosage": "1000 IU",
+    "takenAt": "2024-01-25T08:30:00.000Z",
+    "createdAt": "2024-01-25T08:30:00.000Z",
+    "updatedAt": "2024-01-25T08:30:00.000Z"
+  }
+}
+```
+
+**Important Notes:**
+- This endpoint should be called when the user clicks "Log Medicine" button in the app
+- The medication log is tracked weekly for 4 weeks
+- If `takenAt` is not provided, it defaults to the current server time
+- The `medicineId` is optional and can reference a medicine from the medicines API
+- Medication logs are displayed in the admin dashboard organized by weeks
+
+**Error Responses:**
+- `400 Bad Request`: Missing required fields (medicineName, dosage) or missing user identifier
+- `401 Unauthorized`: Invalid or missing API key
+- `404 Not Found`: User not found
+- `500 Internal Server Error`: Server error
+
+---
+
 ### WooCommerce Integration
 
-#### 11. Get WooCommerce Orders
+#### 13. Get WooCommerce Orders
 
 Retrieve orders from WooCommerce based on user email.
 
@@ -874,7 +1099,7 @@ GET /api/woocommerce/orders?email=user@example.com
 
 ---
 
-#### 12. Cancel WooCommerce Order
+#### 14. Cancel WooCommerce Order
 
 Cancel an order in WooCommerce.
 
@@ -921,7 +1146,7 @@ X-API-Key: ahc_live_sk_your_api_key_here
 
 ---
 
-#### 13. Get WooCommerce Subscriptions
+#### 15. Get WooCommerce Subscriptions
 
 Retrieve subscriptions from WooCommerce based on user email.
 
@@ -983,7 +1208,7 @@ GET /api/woocommerce/subscriptions?email=user@example.com
 
 ---
 
-#### 14. Cancel or Manage WooCommerce Subscription
+#### 16. Cancel or Manage WooCommerce Subscription
 
 Cancel, pause, resume, or update a subscription in WooCommerce.
 
@@ -1060,7 +1285,7 @@ X-API-Key: ahc_live_sk_your_api_key_here
 
 ---
 
-#### 15. Get WooCommerce Billing Address
+#### 17. Get WooCommerce Billing Address
 
 Retrieve billing address for a customer by email.
 
@@ -1114,7 +1339,7 @@ GET /api/woocommerce/billing-address?email=user@example.com
 
 ---
 
-#### 16. Update WooCommerce Billing Address
+#### 18. Update WooCommerce Billing Address
 
 Update billing address for a customer by email.
 
@@ -1651,7 +1876,15 @@ For API support, issues, or questions:
 
 ## Changelog
 
-### Version 1.3.0 (Current)
+### Version 1.4.0 (Current)
+- Added medication log endpoints (GET and POST)
+- Users can now log medication intake with dosage and time
+- Medication logs are organized by weeks (last 4 weeks)
+- Added task status tracking in user endpoint
+- Daily task tracking with automatic reset (3 tasks per day)
+- Task status automatically resets at midnight
+
+### Version 1.3.0
 - Added WooCommerce billing address endpoints (GET and PUT)
 - Users can now retrieve and update their billing address via API
 - Improved WooCommerce subscriptions API to filter by email when customer ID is not found
@@ -1679,5 +1912,5 @@ For API support, issues, or questions:
 
 **Last Updated:** December 2024
 
-**API Version:** 1.3.0
+**API Version:** 1.4.0
 

@@ -137,6 +137,9 @@ model AppUser {
   totalCalories  Int      @default(0)
   streak         Int      @default(0)
   
+  // Task tracking (resets daily)
+  taskStatus     Json?    // { date: "YYYY-MM-DD", tasks: [boolean, boolean, boolean] } - tracks 3 tasks completion for the day
+  
   // Status and tracking
   status         String   @default("Active") // Active, Inactive
   lastLoginAt    DateTime?
@@ -148,6 +151,7 @@ model AppUser {
   
   // Relations
   weightLogs     WeightLog[]
+  medicationLogs MedicationLog[]
   
   // Timestamps
   createdAt      DateTime @default(now())
@@ -255,4 +259,24 @@ model Notification {
   @@index([isActive])
   @@index([createdAt])
   @@map("notifications")
+}
+
+model MedicationLog {
+  id          String   @id @default(cuid())
+  appUserId   String   // Foreign key to AppUser
+  medicineId  String?  // Optional reference to Medicine
+  medicineName String  // Name of the medicine
+  dosage      String   // Dosage information (e.g., "500mg", "1 tablet")
+  takenAt     DateTime @default(now()) // When the medicine was taken
+  
+  // Relations
+  appUser     AppUser  @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([appUserId])
+  @@index([takenAt])
+  @@map("medication_logs")
 }

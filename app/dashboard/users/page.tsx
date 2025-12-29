@@ -20,6 +20,20 @@ type User = {
   streak?: number;
 };
 
+type MedicationLog = {
+  id: string;
+  medicineName: string;
+  dosage: string;
+  takenAt: string;
+};
+
+type MedicationWeek = {
+  week: number;
+  startDate: string;
+  endDate: string;
+  logs: MedicationLog[];
+};
+
 export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -34,6 +48,8 @@ export default function UsersPage() {
   const [inactiveCount, setInactiveCount] = useState(0);
   const [avgTasksToday, setAvgTasksToday] = useState('0.0');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [medicationLogs, setMedicationLogs] = useState<MedicationWeek[]>([]);
+  const [loadingMedicationLogs, setLoadingMedicationLogs] = useState(false);
 
   // Debounce search term
   useEffect(() => {
@@ -103,14 +119,35 @@ export default function UsersPage() {
     fetchUsers();
   }, [fetchUsers]);
 
-  const handleViewUser = (user: User) => {
+  const handleViewUser = async (user: User) => {
     setSelectedUser(user);
     setIsModalOpen(true);
+    
+    // Fetch medication logs for this user
+    setLoadingMedicationLogs(true);
+    try {
+      const response = await fetch(`/api/app-users/medication-log?email=${encodeURIComponent(user.email)}`, {
+        credentials: 'include',
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setMedicationLogs(data.weeks || []);
+      } else {
+        setMedicationLogs([]);
+      }
+    } catch (error) {
+      console.error('Error fetching medication logs:', error);
+      setMedicationLogs([]);
+    } finally {
+      setLoadingMedicationLogs(false);
+    }
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
     setSelectedUser(null);
+    setMedicationLogs([]);
   };
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -474,6 +511,58 @@ export default function UsersPage() {
                     <p className="text-sm font-medium text-[#435970]">{new Date(selectedUser.joinDate).toLocaleDateString()}</p>
                   </div>
                 </div>
+              </div>
+
+              {/* Medication Log Section */}
+              <div className="pt-4 border-t border-gray-200">
+                <h5 className="text-lg font-semibold text-[#435970] mb-4">Medication Log (Last 4 Weeks)</h5>
+                {loadingMedicationLogs ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-[#435970]"></div>
+                    <p className="ml-3 text-[#7895b3]">Loading medication logs...</p>
+                  </div>
+                ) : medicationLogs.length === 0 ? (
+                  <p className="text-sm text-[#7895b3] text-center py-4">No medication logs found for the last 4 weeks.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {medicationLogs.map((week) => (
+                      <div key={week.week} className="bg-[#dfedfb]/20 rounded-lg p-4 border border-[#dfedfb]">
+                        <div className="flex items-center justify-between mb-3">
+                          <h6 className="text-sm font-semibold text-[#435970]">
+                            Week {week.week} ({new Date(week.startDate).toLocaleDateString()} - {new Date(week.endDate).toLocaleDateString()})
+                          </h6>
+                          <span className="text-xs text-[#7895b3] bg-[#dfedfb] px-2 py-1 rounded-full">
+                            {week.logs.length} {week.logs.length === 1 ? 'entry' : 'entries'}
+                          </span>
+                        </div>
+                        {week.logs.length === 0 ? (
+                          <p className="text-xs text-[#7895b3] italic">No medication logged this week</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {week.logs.map((log) => (
+                              <div key={log.id} className="bg-white rounded p-3 border border-[#dfedfb]">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <p className="text-sm font-medium text-[#435970]">{log.medicineName}</p>
+                                    <p className="text-xs text-[#7895b3] mt-1">Dosage: {log.dosage}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-xs text-[#7895b3]">
+                                      {new Date(log.takenAt).toLocaleDateString()}
+                                    </p>
+                                    <p className="text-xs text-[#7895b3]">
+                                      {new Date(log.takenAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
