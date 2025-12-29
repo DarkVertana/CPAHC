@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 
 type User = {
   id: string;
@@ -22,6 +23,7 @@ type User = {
 
 
 export default function UsersPage() {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,8 +105,8 @@ export default function UsersPage() {
   }, [fetchUsers]);
 
   const handleViewUser = (user: User) => {
-    // Navigate to user details page
-    window.location.href = `/dashboard/users/${user.id}`;
+    // Navigate to user details page using Next.js router (client-side navigation)
+    router.push(`/dashboard/users/${user.id}`);
   };
 
 

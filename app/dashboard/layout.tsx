@@ -302,7 +302,7 @@ function DashboardLayoutContent({
         <div className="p-4 border-t border-[#7895b3]/30">
           <button
             onClick={() => signOut({ callbackUrl: '/login' })}
-            className="group flex items-center gap-3 px-4 py-3 rounded-xl text-white/80 hover:bg-red-600/20 hover:text-white transition-all duration-300 w-full text-left hover:shadow-md"
+            className="group flex items-center gap-3 px-4 py-3 rounded-xl text-white/80 hover:bg-red-600/30 hover:text-white transition-all duration-300 w-full text-left hover:shadow-md"
           >
             <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
               <svg
