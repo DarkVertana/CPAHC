@@ -126,6 +126,7 @@ model AppUser {
   phone          String?
   age            Int?
   height         String?
+  feet           String?  // Height in feet (e.g., "5'10\"")
   
   // Fitness data
   weight         String?  // Current weight

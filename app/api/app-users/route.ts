@@ -79,6 +79,7 @@ export async function GET(request: NextRequest) {
       phone: user.phone,
       age: user.age,
       height: user.height,
+      feet: user.feet,
       totalWorkouts: user.totalWorkouts,
       totalCalories: user.totalCalories,
       streak: user.streak,

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
+import { formatWeight } from '@/lib/unit-utils';
 
 type User = {
   id: string;
@@ -17,6 +18,7 @@ type User = {
   phone?: string;
   age?: number;
   height?: string;
+  feet?: string;
   totalWorkouts?: number;
   totalCalories?: number;
   streak?: number;
@@ -50,6 +52,7 @@ export default function UserDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMedicationLogs, setLoadingMedicationLogs] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [weightUnit, setWeightUnit] = useState('lbs');
 
   useEffect(() => {
     const fetchUserDetails = async () => {
@@ -203,10 +206,13 @@ export default function UserDetailsPage() {
                   <p className="text-base font-medium text-[#435970]">{user.age} years</p>
                 </div>
               )}
-              {user.height && (
+              {(user.height || user.feet) && (
                 <div>
                   <p className="text-sm text-[#7895b3] mb-1">Height</p>
-                  <p className="text-base font-medium text-[#435970]">{user.height}</p>
+                  <p className="text-base font-medium text-[#435970]">
+                    {user.feet ? user.feet : user.height || 'N/A'}
+                    {user.feet && user.height && ` (${user.height})`}
+                  </p>
                 </div>
               )}
               <div>
@@ -229,13 +235,13 @@ export default function UserDetailsPage() {
               <div>
                 <p className="text-sm text-[#7895b3] mb-1">Current Weight</p>
                 <p className="text-base font-medium text-[#435970]">
-                  {user.weight === 'N/A' ? 'N/A' : `${user.weight} lbs`}
+                  {formatWeight(user.weight, weightUnit)}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-[#7895b3] mb-1">Goal Weight</p>
                 <p className="text-base font-medium text-[#435970]">
-                  {user.goal === 'N/A' ? 'N/A' : `${user.goal} lbs`}
+                  {formatWeight(user.goal, weightUnit)}
                 </p>
               </div>
               {user.totalWorkouts !== undefined && (
@@ -319,7 +325,7 @@ export default function UserDetailsPage() {
               <span className="text-sm text-[#7895b3]">Weight Progress</span>
               <span className="text-sm font-medium text-[#435970]">
                 {user.weight !== 'N/A' && user.goal !== 'N/A'
-                  ? `${user.weight} / ${user.goal} lbs`
+                  ? `${formatWeight(user.weight, weightUnit)} / ${formatWeight(user.goal, weightUnit)}`
                   : 'N/A'}
               </span>
             </div>

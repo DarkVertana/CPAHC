@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
       phone,
       age,
       height,
+      feet,             // Height in feet (e.g., "5'10\"")
       weight,           // Current weight (user_current_weight)
       goal,             // Goal weight (user_goal_weight)
       initialWeight,    // Initial weight (user_initial_weight)
@@ -128,6 +129,7 @@ export async function POST(request: NextRequest) {
         phone: phone,
         age: age,
         height: height,
+        feet: feet,
         weight: weight,
         goal: goal,
         initialWeight: initialWeight,
