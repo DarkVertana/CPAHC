@@ -307,7 +307,8 @@ export default function MedicinesPage() {
         tagline: '',
         description: '',
         image: '',
-        url: ''
+        url: '',
+        price: ''
       });
       setImagePreview(null);
       setImageFile(null);
@@ -341,7 +342,8 @@ export default function MedicinesPage() {
       tagline: '',
       description: '',
       image: '',
-      url: ''
+      url: '',
+      price: ''
     });
   };
 
