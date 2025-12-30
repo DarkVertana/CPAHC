@@ -644,6 +644,7 @@ GET /api/medicines/public?categoryId=1&search=vitamin
     "description": "Detailed product description...",
     "image": "data:image/png;base64,iVBORw0KGgo...",
     "url": "https://example.com/product/premium-fat-burner",
+    "price": 29.99,
     "createdAt": "2024-01-10T08:00:00.000Z",
     "updatedAt": "2024-01-12T14:30:00.000Z"
   }
@@ -669,6 +670,7 @@ GET /api/medicines/public?categoryId=1&search=vitamin
       "description": "Detailed product description...",
       "image": "data:image/png;base64,iVBORw0KGgo...",
       "url": "https://example.com/product/premium-fat-burner",
+      "price": 29.99,
       "createdAt": "2024-01-10T08:00:00.000Z",
       "updatedAt": "2024-01-12T14:30:00.000Z"
     }
@@ -684,11 +686,25 @@ GET /api/medicines/public?categoryId=1&search=vitamin
 }
 ```
 
+**Response Fields:**
+- `id` (string): Unique medicine identifier
+- `categoryId` (number): ID of the medicine category
+- `category` (object): Category information including `id`, `title`, `tagline`, and `icon`
+- `title` (string): Medicine/product title
+- `tagline` (string, nullable): Short tagline or subtitle
+- `description` (string, nullable): Detailed product description
+- `image` (string, nullable): Base64-encoded image data URL
+- `url` (string, nullable): Product URL or external link
+- `price` (number, nullable): Price in USD. Can be `null` if not set
+- `createdAt` (string): ISO 8601 timestamp of creation
+- `updatedAt` (string): ISO 8601 timestamp of last update
+
 **Important Notes:**
 - Only active medicines are returned
 - Images are stored as Base64 data URLs
 - Each medicine includes its category information with icon
 - Category icons are returned as relative paths (e.g., `/medicine/category-icons/filename.png`) and should be resolved to full URLs on the client side
+- Price is optional and may be `null` if not set. When present, it represents the price in USD (e.g., `29.99` for $29.99)
 
 **Error Responses:**
 - `401 Unauthorized`: Invalid or missing API key
@@ -2184,7 +2200,13 @@ For API support, issues, or questions:
 
 ## Changelog
 
-### Version 1.6.0 (Current)
+### Version 1.7.0 (Current)
+- Added `price` field to Medicines API
+- Medicine responses now include optional `price` field (in USD)
+- Price can be `null` if not set for a medicine
+- Price is displayed in USD format (e.g., `29.99` for $29.99)
+
+### Version 1.6.0
 - Improved Weight Logs GET endpoint
 - Increased default limit from 10 to 50, max limit from 50 to 100
 - Enhanced email matching with case-insensitive normalization
