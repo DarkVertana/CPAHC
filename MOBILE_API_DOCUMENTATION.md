@@ -230,6 +230,74 @@ GET /api/app-users/get?email=user@example.com
 
 ---
 
+#### 2. Delete User
+
+Delete an app user and all associated data. This is a destructive operation that permanently removes:
+- User account
+- All weight log history
+- All medication logs
+- All other user-related data
+
+**Endpoint:** `DELETE /api/app-users/delete`
+
+**Headers:**
+```http
+X-API-Key: ahc_live_sk_your_api_key_here
+```
+
+**Query Parameters:**
+- `wpUserId` (string, optional): WordPress user ID (required if email not provided)
+- `email` (string, optional): User email (required if wpUserId not provided)
+
+**Note:** At least one of `wpUserId` or `email` must be provided.
+
+**Example Request:**
+```http
+DELETE /api/app-users/delete?wpUserId=123
+DELETE /api/app-users/delete?email=user@example.com
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "User and all associated data deleted successfully",
+  "deleted": {
+    "userId": "clx123abc",
+    "wpUserId": "123",
+    "email": "user@example.com",
+    "weightLogs": 15,
+    "medicationLogs": 8
+  }
+}
+```
+
+**Response Fields:**
+- `success` (boolean): Indicates successful deletion
+- `message` (string): Success message
+- `deleted` (object): Information about what was deleted
+  - `userId` (string): Internal user ID that was deleted
+  - `wpUserId` (string): WordPress user ID that was deleted
+  - `email` (string): Email address of the deleted user
+  - `weightLogs` (number): Number of weight logs that were deleted
+  - `medicationLogs` (number): Number of medication logs that were deleted
+
+**Important Notes:**
+- ⚠️ **This is a permanent and irreversible operation**
+- All weight log history will be permanently deleted
+- All medication logs will be permanently deleted
+- All user data will be permanently removed from the system
+- Use this endpoint with caution, especially in production environments
+- Consider implementing a confirmation step in your mobile app before calling this endpoint
+
+**Error Responses:**
+- `400 Bad Request`: Missing both wpUserId and email parameters
+- `401 Unauthorized`: Invalid or missing API key
+- `404 Not Found`: User not found
+- `500 Internal Server Error`: Server error
+
+---
+
 #### 3. Get Task Status
 
 Retrieve the current task status for a user. Tasks reset daily and there are 3 tasks per day.
@@ -2041,6 +2109,30 @@ class ApiService {
     }
   }
 
+  // Delete User
+  static Future<Map<String, dynamic>> deleteUser({
+    String? wpUserId,
+    String? userEmail,
+  }) async {
+    final queryParams = <String, String>{};
+
+    if (wpUserId != null) {
+      queryParams['wpUserId'] = wpUserId;
+    }
+    if (userEmail != null) {
+      queryParams['userEmail'] = userEmail;
+    }
+
+    final uri = Uri.parse('$baseUrl/app-users/delete').replace(queryParameters: queryParams);
+    final response = await http.delete(uri, headers: headers);
+
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('Failed to delete user');
+    }
+  }
+
   // Submit Weight Log
   static Future<Map<String, dynamic>> submitWeightLog({
     required String userId,
@@ -2200,7 +2292,14 @@ For API support, issues, or questions:
 
 ## Changelog
 
-### Version 1.7.0 (Current)
+### Version 1.8.0 (Current)
+- Added Delete User endpoint (`DELETE /api/app-users/delete`)
+- Users can now delete their account and all associated data
+- Weight logs and medication logs are automatically deleted when a user is deleted
+- Endpoint accepts `wpUserId` or `email` as query parameters
+- Returns count of deleted weight logs and medication logs
+
+### Version 1.7.0
 - Added `price` field to Medicines API
 - Medicine responses now include optional `price` field (in USD)
 - Price can be `null` if not set for a medicine
