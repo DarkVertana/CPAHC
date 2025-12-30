@@ -996,30 +996,46 @@ export default function SettingsPage() {
               </div>
               <div>
                 <label htmlFor="fcmServerKey" className="block text-sm font-medium text-[#435970] mb-2">
-                  FCM Server Key
+                  FCM Server Key <span className="text-xs text-orange-600">(Deprecated - Use Service Account)</span>
                 </label>
                 <input
                   type="password"
                   id="fcmServerKey"
                   value={settings.fcmServerKey}
                   onChange={(e) => handleInputChange('fcmServerKey', e.target.value)}
-                  className="w-full px-4 py-2 border border-[#dfedfb] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7895b3] focus:border-transparent text-[#435970] placeholder:text-[#7895b3]"
+                  className="w-full px-4 py-2 border border-orange-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent text-[#435970] placeholder:text-[#7895b3] bg-orange-50"
                   placeholder="AAAAxxxxxxx:APA91bH..."
+                  disabled
                 />
-                <p className="text-xs text-[#7895b3] mt-1">FCM Server Key from Firebase Console → Project Settings → Cloud Messaging</p>
+                <p className="text-xs text-orange-600 mt-1">
+                  ⚠️ This field is deprecated. The server now uses FCM API v1 which requires service account credentials via environment variables.
+                  See instructions above for proper setup.
+                </p>
               </div>
             </div>
 
             <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <p className="text-sm text-blue-800 font-medium mb-2">How to get your FCM credentials:</p>
-              <ol className="text-xs text-blue-700 list-decimal list-inside space-y-1">
-                <li>Go to Firebase Console (https://console.firebase.google.com)</li>
-                <li>Select your project (or create a new one)</li>
-                <li>Go to Project Settings (gear icon) → Cloud Messaging tab</li>
-                <li>Copy the "Server key" (under Cloud Messaging API (Legacy))</li>
-                <li>Copy the Project ID from the General tab</li>
-                <li>Note: For production, it's recommended to use a Service Account JSON file instead</li>
+              <p className="text-sm text-blue-800 font-medium mb-2">FCM API v1 Setup (Required):</p>
+              <p className="text-xs text-blue-700 mb-2">
+                The server now uses <strong>Firebase Cloud Messaging API v1</strong> (not the legacy API). 
+                You must configure service account credentials via environment variables.
+              </p>
+              <ol className="text-xs text-blue-700 list-decimal list-inside space-y-1 mb-3">
+                <li>Go to Firebase Console → Your Project → Project Settings → Service Accounts tab</li>
+                <li>Click "Generate New Private Key" to download the service account JSON file</li>
+                <li>Set environment variable <code className="bg-blue-100 px-1 rounded">FIREBASE_SERVICE_ACCOUNT</code> to the JSON content, OR</li>
+                <li>Set <code className="bg-blue-100 px-1 rounded">GOOGLE_APPLICATION_CREDENTIALS</code> to the file path</li>
+                <li>Enter your Firebase Project ID below (from Project Settings → General tab)</li>
               </ol>
+              <div className="mt-3 pt-3 border-t border-blue-200">
+                <p className="text-xs text-blue-600 font-medium mb-1">⚠️ Important:</p>
+                <ul className="text-xs text-blue-700 list-disc list-inside space-y-1">
+                  <li>The FCM Server Key field below is deprecated and may not work with the new API</li>
+                  <li>Service account credentials are required for FCM API v1</li>
+                  <li>Never commit service account JSON files to version control</li>
+                  <li>For production, always use environment variables for security</li>
+                </ul>
+              </div>
             </div>
           </div>
           </div>

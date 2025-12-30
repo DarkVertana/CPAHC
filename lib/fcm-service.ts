@@ -1,14 +1,16 @@
 import { prisma } from './prisma';
+import * as admin from 'firebase-admin';
 
 let fcmInitialized = false;
-let fcmServerKey: string | null = null;
+let firebaseApp: admin.app.App | null = null;
 
 /**
- * Initialize FCM (using server key approach)
- * Note: For production, it's recommended to use Firebase Admin SDK with service account JSON
+ * Initialize FCM using Firebase Admin SDK (uses new FCM API v1 internally)
+ * Requires service account credentials in environment variable FIREBASE_SERVICE_ACCOUNT
+ * or GOOGLE_APPLICATION_CREDENTIALS pointing to service account JSON file
  */
 export async function initializeFCM(): Promise<boolean> {
-  if (fcmInitialized && fcmServerKey) {
+  if (fcmInitialized && firebaseApp) {
     return true;
   }
 
@@ -18,12 +20,41 @@ export async function initializeFCM(): Promise<boolean> {
       where: { id: 'settings' },
     });
 
-    if (!settings?.fcmServerKey) {
-      console.warn('FCM server key not configured');
+    if (!settings?.fcmProjectId) {
+      console.warn('FCM project ID not configured');
       return false;
     }
 
-    fcmServerKey = settings.fcmServerKey;
+    // Initialize Firebase Admin if not already initialized
+    if (!admin.apps.length) {
+      // Try to get service account from environment variable
+      const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
+      const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+
+      if (serviceAccountJson) {
+        try {
+          const serviceAccount = JSON.parse(serviceAccountJson);
+          firebaseApp = admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+            projectId: settings.fcmProjectId,
+          });
+        } catch (error) {
+          console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT JSON:', error);
+          return false;
+        }
+      } else if (credentialsPath) {
+        firebaseApp = admin.initializeApp({
+          credential: admin.credential.applicationDefault(),
+          projectId: settings.fcmProjectId,
+        });
+      } else {
+        console.warn('Firebase service account not configured. Set FIREBASE_SERVICE_ACCOUNT (JSON string) or GOOGLE_APPLICATION_CREDENTIALS (file path)');
+        return false;
+      }
+    } else {
+      firebaseApp = admin.app();
+    }
+
     fcmInitialized = true;
     return true;
   } catch (error) {
@@ -33,7 +64,8 @@ export async function initializeFCM(): Promise<boolean> {
 }
 
 /**
- * Send push notification to a single device using FCM HTTP API
+ * Send push notification to a single device using Firebase Admin SDK
+ * (uses new FCM API v1 internally - no legacy API)
  */
 export async function sendPushNotification(
   fcmToken: string,
@@ -44,20 +76,20 @@ export async function sendPushNotification(
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
     const initialized = await initializeFCM();
-    if (!initialized || !fcmServerKey) {
+    if (!initialized || !firebaseApp) {
       return {
         success: false,
-        error: 'FCM not initialized. Please configure FCM settings.',
+        error: 'FCM not initialized. Please configure FCM settings and service account credentials.',
       };
     }
 
-    // Build notification payload
-    const payload: any = {
-      to: fcmToken,
+    // Build message payload for FCM API v1 (via Firebase Admin SDK)
+    const message: admin.messaging.Message = {
+      token: fcmToken,
       notification: {
         title,
         body,
-        ...(imageUrl && { image: imageUrl }),
+        ...(imageUrl && { imageUrl }),
       },
       data: data ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {},
       android: {
@@ -70,45 +102,30 @@ export async function sendPushNotification(
       },
     };
 
-    // Send via FCM HTTP API
-    const response = await fetch('https://fcm.googleapis.com/fcm/send', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `key=${fcmServerKey}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const result = await response.json();
-
-    if (!response.ok || result.failure === 1) {
-      // Handle invalid token
-      if (result.results?.[0]?.error === 'InvalidRegistration' || 
-          result.results?.[0]?.error === 'NotRegistered') {
-        // Remove invalid token from database
-        await prisma.appUser.updateMany({
-          where: { fcmToken },
-          data: { fcmToken: null },
-        });
-        return {
-          success: false,
-          error: 'Invalid FCM token',
-        };
-      }
-
-      return {
-        success: false,
-        error: result.results?.[0]?.error || 'Failed to send push notification',
-      };
-    }
+    // Send via Firebase Admin SDK (uses FCM API v1 internally)
+    const response = await admin.messaging(firebaseApp).send(message);
 
     return {
       success: true,
-      messageId: result.message_id || result.multicast_id?.toString(),
+      messageId: response,
     };
   } catch (error: any) {
     console.error('Error sending push notification:', error);
+
+    // Handle invalid token
+    if (error.code === 'messaging/invalid-registration-token' ||
+        error.code === 'messaging/registration-token-not-registered') {
+      // Remove invalid token from database
+      await prisma.appUser.updateMany({
+        where: { fcmToken },
+        data: { fcmToken: null },
+      });
+      return {
+        success: false,
+        error: 'Invalid FCM token',
+      };
+    }
+
     return {
       success: false,
       error: error.message || 'Failed to send push notification',
@@ -117,8 +134,9 @@ export async function sendPushNotification(
 }
 
 /**
- * Send push notification to multiple devices using FCM HTTP API
- * FCM supports up to 1000 tokens per request
+ * Send push notification to multiple devices using Firebase Admin SDK
+ * (uses new FCM API v1 internally - no legacy API)
+ * Processes tokens in parallel with a concurrency limit
  */
 export async function sendPushNotificationToMultiple(
   fcmTokens: string[],
@@ -129,11 +147,11 @@ export async function sendPushNotificationToMultiple(
 ): Promise<{ successCount: number; failureCount: number; errors: string[] }> {
   try {
     const initialized = await initializeFCM();
-    if (!initialized || !fcmServerKey) {
+    if (!initialized || !firebaseApp) {
       return {
         successCount: 0,
         failureCount: fcmTokens.length,
-        errors: ['FCM not initialized. Please configure FCM settings.'],
+        errors: ['FCM not initialized. Please configure FCM settings and service account credentials.'],
       };
     }
 
@@ -145,63 +163,55 @@ export async function sendPushNotificationToMultiple(
       };
     }
 
-    // FCM supports up to 1000 tokens per request
-    const batchSize = 1000;
     let totalSuccess = 0;
     let totalFailure = 0;
     const allErrors: string[] = [];
     const invalidTokens: string[] = [];
 
-    // Process in batches
-    for (let i = 0; i < fcmTokens.length; i += batchSize) {
-      const batch = fcmTokens.slice(i, i + batchSize);
+    // Process tokens in parallel with concurrency limit (50 concurrent requests)
+    const concurrencyLimit = 50;
+    for (let i = 0; i < fcmTokens.length; i += concurrencyLimit) {
+      const batch = fcmTokens.slice(i, i + concurrencyLimit);
 
-      const payload: any = {
-        registration_ids: batch,
-        notification: {
-          title,
-          body,
-          ...(imageUrl && { image: imageUrl }),
-        },
-        data: data ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {},
-        android: {
-          priority: 'high',
+      const promises = batch.map(async (token) => {
+        const message: admin.messaging.Message = {
+          token,
           notification: {
-            channelId: 'default',
-            sound: 'default',
-            priority: 'high',
+            title,
+            body,
+            ...(imageUrl && { imageUrl }),
           },
-        },
-      };
+          data: data ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {},
+          android: {
+            priority: 'high',
+            notification: {
+              channelId: 'default',
+              sound: 'default',
+              priority: 'high',
+            },
+          },
+        };
 
-      const response = await fetch('https://fcm.googleapis.com/fcm/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `key=${fcmServerKey}`,
-        },
-        body: JSON.stringify(payload),
+        try {
+          // Send via Firebase Admin SDK (uses FCM API v1 internally)
+          await admin.messaging(firebaseApp!).send(message);
+          totalSuccess++;
+          return { success: true, token };
+        } catch (error: any) {
+          totalFailure++;
+          const errorMsg = error.message || 'Unknown error';
+          allErrors.push(errorMsg);
+
+          // Track invalid tokens
+          if (error.code === 'messaging/invalid-registration-token' ||
+              error.code === 'messaging/registration-token-not-registered') {
+            invalidTokens.push(token);
+          }
+          return { success: false, token };
+        }
       });
 
-      const result = await response.json();
-
-      if (result.results) {
-        result.results.forEach((res: any, idx: number) => {
-          if (res.error) {
-            totalFailure++;
-            allErrors.push(res.error);
-            // Track invalid tokens
-            if (res.error === 'InvalidRegistration' || res.error === 'NotRegistered') {
-              invalidTokens.push(batch[idx]);
-            }
-          } else {
-            totalSuccess++;
-          }
-        });
-      } else {
-        totalFailure += batch.length;
-        allErrors.push('Unknown error from FCM');
-      }
+      await Promise.all(promises);
     }
 
     // Remove invalid tokens from database

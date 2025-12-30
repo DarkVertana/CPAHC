@@ -1744,21 +1744,61 @@ fun registerFCMToken(wpUserId: String, email: String, fcmToken: String) {
 }
 ```
 
-### Step 7: Configure FCM in Admin Dashboard
+### Step 7: Configure FCM in Admin Dashboard (Server-Side Setup)
+
+The server now uses **Firebase Cloud Messaging API v1** (not the legacy API). You need to configure service account credentials.
+
+#### Option A: Using Environment Variables (Recommended for Production)
+
+1. **Get Service Account Key:**
+   - Go to Firebase Console → Your Project
+   - Click the gear icon → Project Settings
+   - Go to "Service Accounts" tab
+   - Click "Generate New Private Key"
+   - Download the JSON file
+
+2. **Set Environment Variable:**
+   - Set `FIREBASE_SERVICE_ACCOUNT` environment variable to the JSON content as a string:
+   ```env
+   FIREBASE_SERVICE_ACCOUNT='{"type":"service_account","project_id":"your-project-id",...}'
+   ```
+   - OR set `GOOGLE_APPLICATION_CREDENTIALS` to the file path:
+   ```env
+   GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
+   ```
+
+3. **Configure Project ID in Dashboard:**
+   - Go to your admin dashboard → Settings → WooCommerce tab
+   - Scroll to "Firebase Cloud Messaging (FCM) Settings"
+   - Enter your Firebase Project ID (from Firebase Console → Project Settings → General)
+   - Click "Save Settings"
+
+#### Option B: Using Dashboard UI (For Testing/Development)
 
 1. Go to your admin dashboard → Settings → WooCommerce tab
 2. Scroll to "Firebase Cloud Messaging (FCM) Settings"
 3. Enter your Firebase Project ID (from Firebase Console → Project Settings → General)
-4. Enter your FCM Server Key (from Firebase Console → Project Settings → Cloud Messaging → Server key)
+4. **Note:** The FCM Server Key field is deprecated. For production, use service account credentials via environment variables as described in Option A.
 5. Click "Save Settings"
 
-### Step 8: Get FCM Server Key
+### Step 8: Get Firebase Project ID and Service Account
 
-1. Go to Firebase Console → Your Project
-2. Click the gear icon → Project Settings
-3. Go to "Cloud Messaging" tab
-4. Under "Cloud Messaging API (Legacy)", copy the "Server key"
-5. Paste it in the admin dashboard settings
+1. **Get Project ID:**
+   - Go to Firebase Console → Your Project
+   - Click the gear icon → Project Settings
+   - Go to "General" tab
+   - Copy the "Project ID"
+
+2. **Get Service Account Key (Required for FCM API v1):**
+   - In the same Project Settings page, go to "Service Accounts" tab
+   - Click "Generate New Private Key"
+   - A JSON file will be downloaded
+   - This file contains your service account credentials needed for the new FCM API v1
+   - **Important:** Keep this file secure and never commit it to version control
+
+3. **Configure on Server:**
+   - Set the service account JSON as an environment variable (see Step 7, Option A)
+   - The server will automatically use FCM API v1 (no legacy API)
 
 ### Step 9: Test Push Notifications
 
@@ -1769,11 +1809,14 @@ fun registerFCMToken(wpUserId: String, email: String, fcmToken: String) {
 
 ### Important Notes
 
+- **FCM API v1**: The server now uses Firebase Cloud Messaging API v1 (not the legacy API). This is automatically handled by Firebase Admin SDK.
+- **Service Account Required**: For production, you must configure service account credentials via environment variables. The legacy server key method is deprecated.
 - **Token Refresh**: FCM tokens can change. Always listen for `onNewToken()` and re-register the token
 - **Token Removal**: Call the DELETE endpoint when user logs out to stop receiving notifications
 - **Error Handling**: Handle invalid token errors and remove them from your local storage
 - **Background Notifications**: Configure notification channels for Android 8.0+
 - **Production**: For production apps, you'll need to add your app's SHA-1 certificate fingerprint in Firebase Console
+- **Security**: Never commit service account JSON files to version control. Use environment variables or secure secret management
 
 ### Android Notification Channel Setup
 
@@ -1800,12 +1843,50 @@ private fun createNotificationChannel() {
 }
 ```
 
+### Admin Dashboard UI Configuration
+
+To configure FCM settings through the admin dashboard:
+
+1. **Navigate to Settings:**
+   - Log in to the admin dashboard
+   - Go to **Settings** (in the sidebar menu)
+   - Click on the **WooCommerce** tab
+
+2. **Configure FCM Settings:**
+   - Scroll down to the **"Firebase Cloud Messaging (FCM) Settings"** section
+   - Enter your **Firebase Project ID** (required)
+     - This can be found in Firebase Console → Project Settings → General tab
+   - The **FCM Server Key** field is now deprecated and disabled
+     - The server uses FCM API v1 which requires service account credentials
+     - Service account must be configured via environment variables (see Step 7)
+
+3. **Save Settings:**
+   - Click **"Save Settings"** button at the bottom of the page
+   - Your Firebase Project ID will be saved
+
+4. **Important Notes:**
+   - The dashboard UI only stores the Project ID
+   - Service account credentials must be configured on the server via environment variables
+   - The FCM Server Key field is shown but disabled (deprecated)
+   - For production, always use environment variables for service account credentials
+
 ### Troubleshooting
 
-- **No notifications received**: Check that FCM token is registered and notification is active
+- **No notifications received**: 
+  - Check that FCM token is registered and notification is active
+  - Verify service account credentials are properly configured on the server
+  - Check server logs for FCM initialization errors
+  - Verify Firebase Project ID is correctly set in dashboard settings
 - **Token registration fails**: Verify API key is correct and user exists
 - **Notifications not showing**: Check notification channel setup and app permissions
 - **Token invalid errors**: Token may have expired, re-register the token
+- **FCM initialization errors**: 
+  - Verify `FIREBASE_SERVICE_ACCOUNT` or `GOOGLE_APPLICATION_CREDENTIALS` is set correctly
+  - Check that the service account JSON is valid and has proper permissions
+  - Ensure Firebase Project ID matches the service account project
+  - Verify Project ID is set in dashboard settings
+- **Legacy API errors**: The server no longer uses the legacy FCM API. Make sure service account credentials are configured for FCM API v1
+- **Dashboard shows deprecated warning**: This is expected. The FCM Server Key field is disabled because the server uses FCM API v1
 
 ---
 
@@ -2292,7 +2373,15 @@ For API support, issues, or questions:
 
 ## Changelog
 
-### Version 1.8.0 (Current)
+### Version 1.9.0 (Current)
+- **Migrated to Firebase Cloud Messaging API v1** (no longer using legacy API)
+- Server now uses Firebase Admin SDK which automatically uses FCM API v1
+- Service account credentials required (configured via environment variables)
+- FCM Server Key field in dashboard is deprecated (shown but disabled)
+- Updated FCM setup documentation with new API v1 requirements
+- Improved error handling for FCM token validation
+
+### Version 1.8.0
 - Added Delete User endpoint (`DELETE /api/app-users/delete`)
 - Users can now delete their account and all associated data
 - Weight logs and medication logs are automatically deleted when a user is deleted
