@@ -163,64 +163,6 @@ model AppUser {
   @@map("app_user")
 }
 
-model Blog {
-  id            String   @id @default(cuid())
-  title         String
-  tagline       String
-  description   String   @db.Text // Rich text HTML content
-  tags          String[] // Array of tags
-  featuredImage String
-  status        String   @default("published") // published, draft
-  
-  // Timestamps
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  @@index([status])
-  @@map("blogs")
-}
-
-model MedicineCategory {
-  id        Int      @id @default(autoincrement())
-  title     String
-  tagline   String?
-  icon      String?  // Icon image path
-  
-  // Relations
-  medicines Medicine[]
-  
-  // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([title])
-  @@map("medicine_categories")
-}
-
-model Medicine {
-  id          String   @id @default(cuid())
-  categoryId Int
-  title       String
-  tagline     String?
-  description String?  @db.Text
-  image       String?
-  url         String?
-  price       Float?   // Price in USD
-  status      String   @default("active") // active, inactive
-  
-  // Relations
-  category MedicineCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  
-  // Timestamps
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([categoryId])
-  @@index([status])
-  @@index([title])
-  @@map("medicines")
-}
-
 model WeightLog {
   id            String   @id @default(cuid())
   appUserId     String   // Foreign key to AppUser
@@ -266,7 +208,7 @@ model Notification {
 model MedicationLog {
   id          String   @id @default(cuid())
   appUserId   String   // Foreign key to AppUser
-  medicineId  String?  // Optional reference to Medicine
+  medicineId  String?  // Optional medicine ID (kept for backward compatibility, no foreign key)
   medicineName String  // Name of the medicine
   dosage      String   // Dosage information (e.g., "500mg", "1 tablet")
   takenAt     DateTime @default(now()) // When the medicine was taken
@@ -277,7 +219,7 @@ model MedicationLog {
   // Timestamps
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
   @@index([appUserId])
   @@index([takenAt])
   @@map("medication_logs")
