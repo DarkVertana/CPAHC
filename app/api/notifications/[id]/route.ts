@@ -57,7 +57,7 @@ export async function PUT(
 
     const resolvedParams = await Promise.resolve(params);
     const body = await request.json();
-    const { title, description, image, isActive } = body;
+    const { title, description, image, url, isActive } = body;
 
     if (!title || !description) {
       return NextResponse.json(
@@ -72,6 +72,7 @@ export async function PUT(
         title,
         description,
         image: image !== undefined ? image : undefined,
+        url: url !== undefined ? (url && url.trim() ? url.trim() : null) : undefined,
         isActive: isActive !== undefined ? isActive : undefined,
       },
     });

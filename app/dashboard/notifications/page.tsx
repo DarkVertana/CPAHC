@@ -12,6 +12,7 @@ type Notification = {
   title: string;
   description: string;
   image: string | null;
+  url: string | null;
   isActive: boolean;
   receiverCount: number;
   viewCount: number;
@@ -37,6 +38,7 @@ export default function NotificationsPage() {
     title: '',
     description: '',
     image: '',
+    url: '',
     isActive: true,
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -131,6 +133,7 @@ export default function NotificationsPage() {
       title: notification.title,
       description: notification.description,
       image: notification.image || '',
+      url: notification.url || '',
       isActive: notification.isActive,
     });
     setImageFile(null);
@@ -145,6 +148,7 @@ export default function NotificationsPage() {
       title: '',
       description: '',
       image: '',
+      url: '',
       isActive: true,
     });
     setImageFile(null);
@@ -216,6 +220,7 @@ export default function NotificationsPage() {
           title: formData.title,
           description: formData.description,
           image: imageUrl,
+          url: formData.url.trim() || null,
           isActive: formData.isActive,
         }),
         credentials: 'include',
@@ -235,25 +240,22 @@ export default function NotificationsPage() {
       
       if (responseData.pushNotification) {
         const push = responseData.pushNotification;
-        if (push.error) {
-          notificationMessage += `\n\n⚠️ Push notification failed: ${push.error}`;
-          if (push.errors && push.errors.length > 0) {
-            notificationMessage += `\n\nError details: ${push.errors.join(', ')}`;
-          }
-        } else if (push.totalUsers === 0) {
+        // Only show errors if all notifications failed (successCount === 0)
+        // If some succeeded, don't show error details to avoid confusion
+        if (push.totalUsers === 0) {
           notificationMessage += '\n\n⚠️ No active users with FCM tokens found';
-        } else if (push.sent) {
+        } else if (push.sent && push.successCount > 0) {
+          // Successfully sent to at least one user - show success message
           notificationMessage += `\n\n✅ Push notification sent to ${push.successCount} user(s)`;
+          // Only show failure count if there were failures, but don't show error details
           if (push.failureCount > 0) {
-            notificationMessage += ` (${push.failureCount} failed)`;
-            if (push.errors && push.errors.length > 0) {
-              notificationMessage += `\n\nFailed: ${push.errors.join(', ')}`;
-            }
+            notificationMessage += ` (${push.failureCount} failed - invalid tokens removed)`;
           }
-        } else {
+        } else if (push.successCount === 0 && push.failureCount > 0) {
+          // All failed - show error message
           notificationMessage += `\n\n⚠️ Push notification failed to send (${push.failureCount} failures)`;
-          if (push.errors && push.errors.length > 0) {
-            notificationMessage += `\n\nError details: ${push.errors.join(', ')}`;
+          if (push.error) {
+            notificationMessage += `\n\nError: ${push.error}`;
           }
         }
       }
@@ -264,7 +266,8 @@ export default function NotificationsPage() {
       setNotification({
         title: 'Success',
         message: notificationMessage,
-        type: responseData.pushNotification?.error ? 'warning' : 'success',
+        // Only show as warning if all notifications failed, otherwise show as success
+        type: (responseData.pushNotification?.successCount ?? 0) > 0 ? 'success' : 'warning',
       });
       setShowNotification(true);
     } catch (err) {
@@ -293,6 +296,7 @@ export default function NotificationsPage() {
           title: notification.title,
           description: notification.description,
           image: notification.image,
+          url: notification.url,
           isActive: !currentStatus,
         }),
         credentials: 'include',
@@ -600,6 +604,24 @@ export default function NotificationsPage() {
                     />
                   </div>
                 )}
+              </div>
+
+              {/* Navigation URL */}
+              <div>
+                <label htmlFor="url" className="block text-sm font-medium text-[#435970] mb-2">
+                  Navigation URL (Optional)
+                </label>
+                <input
+                  type="text"
+                  id="url"
+                  value={formData.url}
+                  onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                  className="w-full px-4 py-2 border border-[#dfedfb] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7895b3] focus:border-transparent text-[#435970] placeholder:text-[#7895b3]"
+                  placeholder="e.g., /medicines, /blogs/123, /profile"
+                />
+                <p className="text-xs text-[#7895b3] mt-1">
+                  Mobile app route to navigate when notification is tapped (leave empty for no navigation)
+                </p>
               </div>
 
               {/* Active Status */}

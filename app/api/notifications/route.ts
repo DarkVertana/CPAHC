@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { title, description, image, isActive } = body;
+    const { title, description, image, url, isActive } = body;
 
     if (!title || !description) {
       return NextResponse.json(
@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
         title,
         description,
         image: image || null,
+        url: url && url.trim() ? url.trim() : null,
         isActive: isActive !== undefined ? isActive : true,
       },
     });
@@ -73,14 +74,22 @@ export async function POST(request: NextRequest) {
             : `${process.env.NEXTAUTH_URL || 'https://appanel.alternatehealthclub.com'}${notification.image}`
           : undefined;
         
+        // Build data payload for FCM
+        const fcmData: Record<string, string> = {
+          notificationId: notification.id,
+          type: 'notification',
+        };
+        
+        // Add URL to data payload if provided
+        if (notification.url) {
+          fcmData.url = notification.url;
+        }
+        
         pushResult = await sendPushNotificationToAll(
           notification.title,
           notification.description,
           imageUrl,
-          {
-            notificationId: notification.id,
-            type: 'notification',
-          }
+          fcmData
         );
 
         // Update receiver count if push was successful

@@ -253,6 +253,7 @@ model Notification {
   title       String
   description String   @db.Text
   image       String?  // Path to notification image
+  url         String?  // URL/route for mobile app navigation (e.g., /medicines, /blogs/123)
   isActive    Boolean  @default(true)
   
   // Tracking metrics

@@ -48,14 +48,22 @@ export async function POST(
         : `${process.env.NEXTAUTH_URL || 'https://appanel.alternatehealthclub.com'}${notification.image}`
       : undefined;
 
+    // Build data payload for FCM
+    const fcmData: Record<string, string> = {
+      notificationId: notification.id,
+      type: 'notification',
+    };
+    
+    // Add URL to data payload if provided
+    if (notification.url) {
+      fcmData.url = notification.url;
+    }
+    
     const pushResult = await sendPushNotificationToAll(
       notification.title,
       notification.description,
       imageUrl,
-      {
-        notificationId: notification.id,
-        type: 'notification',
-      }
+      fcmData
     );
 
     // Update receiver count if push was successful
