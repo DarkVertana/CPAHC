@@ -121,13 +121,30 @@ export async function sendPushNotification(
       };
     }
 
+    // Validate image URL if provided
+    let validImageUrl: string | undefined = undefined;
+    if (imageUrl && imageUrl.trim()) {
+      try {
+        const url = new URL(imageUrl.trim());
+        // Only allow http/https URLs
+        if (url.protocol === 'http:' || url.protocol === 'https:') {
+          validImageUrl = imageUrl.trim();
+          console.log(`Valid image URL for notification: ${validImageUrl.substring(0, 50)}...`);
+        } else {
+          console.warn(`Invalid image URL protocol: ${url.protocol}. Only http/https allowed. Image URL: ${imageUrl.substring(0, 50)}...`);
+        }
+      } catch (e) {
+        console.warn(`Invalid image URL format: ${imageUrl}`, e);
+      }
+    }
+
     // Build message payload for FCM API v1 (via Firebase Admin SDK)
     const message: admin.messaging.Message = {
       token: fcmToken,
       notification: {
         title,
         body,
-        ...(imageUrl && { imageUrl }),
+        ...(validImageUrl && { imageUrl: validImageUrl }),
       },
       data: data ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {},
       android: {
@@ -136,7 +153,21 @@ export async function sendPushNotification(
           channelId: 'default',
           sound: 'default',
           priority: 'high',
+          ...(validImageUrl && { imageUrl: validImageUrl }),
         },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            ...(validImageUrl && { mutableContent: true }),
+          },
+        },
+        ...(validImageUrl && {
+          fcmOptions: {
+            imageUrl: validImageUrl,
+          },
+        }),
       },
     };
 
@@ -201,6 +232,23 @@ export async function sendPushNotificationToMultiple(
       };
     }
 
+    // Validate image URL once before processing (optimization)
+    let validImageUrl: string | undefined = undefined;
+    if (imageUrl && imageUrl.trim()) {
+      try {
+        const url = new URL(imageUrl.trim());
+        // Only allow http/https URLs
+        if (url.protocol === 'http:' || url.protocol === 'https:') {
+          validImageUrl = imageUrl.trim();
+          console.log(`Validated image URL for batch: ${validImageUrl.substring(0, 50)}...`);
+        } else {
+          console.warn(`Invalid image URL protocol: ${url.protocol}. Only http/https allowed. Image: ${imageUrl.substring(0, 50)}...`);
+        }
+      } catch (e) {
+        console.warn(`Invalid image URL format: ${imageUrl}`, e);
+      }
+    }
+
     let totalSuccess = 0;
     let totalFailure = 0;
     const allErrors: string[] = [];
@@ -212,12 +260,13 @@ export async function sendPushNotificationToMultiple(
       const batch = fcmTokens.slice(i, i + concurrencyLimit);
 
       const promises = batch.map(async (token) => {
+
         const message: admin.messaging.Message = {
           token,
           notification: {
             title,
             body,
-            ...(imageUrl && { imageUrl }),
+            ...(validImageUrl && { imageUrl: validImageUrl }),
           },
           data: data ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {},
           android: {
@@ -226,7 +275,21 @@ export async function sendPushNotificationToMultiple(
               channelId: 'default',
               sound: 'default',
               priority: 'high',
+              ...(validImageUrl && { imageUrl: validImageUrl }),
             },
+          },
+          apns: {
+            payload: {
+              aps: {
+                sound: 'default',
+                ...(validImageUrl && { mutableContent: true }),
+              },
+            },
+            ...(validImageUrl && {
+              fcmOptions: {
+                imageUrl: validImageUrl,
+              },
+            }),
           },
         };
 
@@ -245,9 +308,12 @@ export async function sendPushNotificationToMultiple(
             : errorMsg;
           allErrors.push(detailedError);
           
+          // Enhanced logging for debugging
           console.error(`FCM send failed for token ${token.substring(0, 20)}...:`, {
             code: errorCode,
             message: errorMsg,
+            hasImage: !!validImageUrl,
+            imageUrl: validImageUrl ? validImageUrl.substring(0, 50) + '...' : 'none',
             error: error,
           });
 

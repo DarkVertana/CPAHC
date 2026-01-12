@@ -41,8 +41,11 @@ export async function POST(
     }
 
     // Send push notification
+    // Check if image is already a full URL (e.g., from Cloudinary) or a relative path
     const imageUrl = notification.image 
-      ? `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}${notification.image}`
+      ? (notification.image.startsWith('http://') || notification.image.startsWith('https://'))
+        ? notification.image
+        : `${process.env.NEXTAUTH_URL || 'https://appanel.alternatehealthclub.com'}${notification.image}`
       : undefined;
 
     const pushResult = await sendPushNotificationToAll(
