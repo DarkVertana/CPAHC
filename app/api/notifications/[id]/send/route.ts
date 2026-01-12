@@ -55,14 +55,29 @@ export async function POST(
       }
     );
 
+    // Update receiver count if push was successful
+    if (pushResult && pushResult.successCount > 0) {
+      await prisma.notification.update({
+        where: { id: notification.id },
+        data: { receiverCount: pushResult.successCount },
+      });
+    }
+
     return NextResponse.json({
-      success: true,
-      message: 'Push notification sent successfully',
+      success: pushResult.successCount > 0 || pushResult.totalUsers === 0,
+      message: pushResult.error 
+        ? `Push notification failed: ${pushResult.error}`
+        : pushResult.totalUsers === 0
+        ? 'No active users with FCM tokens found'
+        : pushResult.successCount > 0
+        ? 'Push notification sent successfully'
+        : 'Push notification failed to send',
       pushNotification: {
         sent: pushResult.successCount > 0,
         successCount: pushResult.successCount,
         failureCount: pushResult.failureCount,
         totalUsers: pushResult.totalUsers,
+        error: pushResult.error,
       },
     });
   } catch (error) {

@@ -13,6 +13,8 @@ type Notification = {
   description: string;
   image: string | null;
   isActive: boolean;
+  receiverCount: number;
+  viewCount: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -224,15 +226,36 @@ export default function NotificationsPage() {
         throw new Error(errorData.error || 'Failed to save notification');
       }
 
+      const responseData = await response.json();
+      
+      // Check push notification results
+      let notificationMessage = editingNotification 
+        ? 'Notification updated successfully' 
+        : 'Notification created successfully';
+      
+      if (responseData.pushNotification) {
+        const push = responseData.pushNotification;
+        if (push.error) {
+          notificationMessage += `\n\nPush notification failed: ${push.error}`;
+        } else if (push.totalUsers === 0) {
+          notificationMessage += '\n\n⚠️ No active users with FCM tokens found';
+        } else if (push.sent) {
+          notificationMessage += `\n\n✅ Push notification sent to ${push.successCount} user(s)`;
+          if (push.failureCount > 0) {
+            notificationMessage += ` (${push.failureCount} failed)`;
+          }
+        } else {
+          notificationMessage += `\n\n⚠️ Push notification failed to send (${push.failureCount} failures)`;
+        }
+      }
+
       // Refresh notifications list
       await fetchNotifications();
       closeModal();
       setNotification({
         title: 'Success',
-        message: editingNotification 
-          ? 'Notification updated successfully' 
-          : 'Notification created successfully',
-        type: 'success',
+        message: notificationMessage,
+        type: responseData.pushNotification?.error ? 'warning' : 'success',
       });
       setShowNotification(true);
     } catch (err) {
@@ -332,6 +355,12 @@ export default function NotificationsPage() {
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-[#435970] uppercase tracking-wider">
+                  Receivers
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-[#435970] uppercase tracking-wider">
+                  Views
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-[#435970] uppercase tracking-wider">
                   Created
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-semibold text-[#435970] uppercase tracking-wider">
@@ -342,7 +371,7 @@ export default function NotificationsPage() {
             <tbody className="bg-white divide-y divide-[#dfedfb]">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
+                  <td colSpan={8} className="px-6 py-12 text-center">
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#435970]"></div>
                     </div>
@@ -350,7 +379,7 @@ export default function NotificationsPage() {
                 </tr>
               ) : notifications.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
+                  <td colSpan={8} className="px-6 py-12 text-center">
                     <div className="text-[#7895b3]">
                       <svg className="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -413,6 +442,27 @@ export default function NotificationsPage() {
                       >
                         {notification.isActive ? 'Active' : 'Inactive'}
                       </button>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm font-semibold text-[#435970]">
+                          {notification.receiverCount || 0}
+                        </div>
+                        <svg className="w-4 h-4 text-[#7895b3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm font-semibold text-[#435970]">
+                          {notification.viewCount || 0}
+                        </div>
+                        <svg className="w-4 h-4 text-[#7895b3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-[#7895b3]">

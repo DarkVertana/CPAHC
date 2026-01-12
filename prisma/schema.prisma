@@ -153,6 +153,7 @@ model AppUser {
   // Relations
   weightLogs     WeightLog[]
   medicationLogs MedicationLog[]
+  notificationViews NotificationView[]
   
   // Timestamps
   createdAt      DateTime @default(now())
@@ -254,6 +255,13 @@ model Notification {
   image       String?  // Path to notification image
   isActive    Boolean  @default(true)
   
+  // Tracking metrics
+  receiverCount Int    @default(0) // Number of users who received the push notification
+  viewCount     Int    @default(0) // Number of users who viewed/opened the notification
+  
+  // Relations
+  views         NotificationView[]
+  
   // Timestamps
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -261,6 +269,28 @@ model Notification {
   @@index([isActive])
   @@index([createdAt])
   @@map("notifications")
+}
+
+model NotificationView {
+  id             String      @id @default(cuid())
+  notificationId String      // Foreign key to Notification
+  appUserId      String?     // Foreign key to AppUser (optional for anonymous tracking)
+  wpUserId       String?     // WordPress user ID (if appUserId not available)
+  userEmail      String?     // User email (for tracking)
+  viewedAt       DateTime    @default(now())
+  
+  // Relations
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  appUser        AppUser?    @relation(fields: [appUserId], references: [id], onDelete: SetNull)
+  
+  // Timestamps
+  createdAt      DateTime    @default(now())
+  
+  @@unique([notificationId, appUserId]) // Prevent duplicate views from same user
+  @@index([notificationId])
+  @@index([appUserId])
+  @@index([viewedAt])
+  @@map("notification_views")
 }
 
 model MedicationLog {

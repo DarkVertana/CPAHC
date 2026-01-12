@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
 
     // Send push notification if active
     let pushResult = null;
+    let pushError = null;
     if (notification.isActive) {
       try {
         const imageUrl = notification.image 
@@ -78,8 +79,20 @@ export async function POST(request: NextRequest) {
             type: 'notification',
           }
         );
-      } catch (error) {
+
+        // Update receiver count if push was successful
+        if (pushResult && pushResult.successCount > 0) {
+          await prisma.notification.update({
+            where: { id: notification.id },
+            data: { receiverCount: pushResult.successCount },
+          });
+        }
+      } catch (error: any) {
         console.error('Error sending push notification:', error);
+        pushError = {
+          message: error.message || 'Failed to send push notification',
+          details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+        };
         // Don't fail the request if push notification fails
       }
     }
@@ -93,6 +106,13 @@ export async function POST(request: NextRequest) {
         successCount: pushResult.successCount,
         failureCount: pushResult.failureCount,
         totalUsers: pushResult.totalUsers,
+        error: pushError,
+      } : pushError ? {
+        sent: false,
+        successCount: 0,
+        failureCount: 0,
+        totalUsers: 0,
+        error: pushError,
       } : null,
     }, { status: 201 });
   } catch (error) {

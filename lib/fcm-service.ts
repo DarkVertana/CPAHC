@@ -21,7 +21,7 @@ export async function initializeFCM(): Promise<boolean> {
     });
 
     if (!settings?.fcmProjectId) {
-      console.warn('FCM project ID not configured');
+      console.error('FCM project ID not configured in database settings');
       return false;
     }
 
@@ -34,31 +34,51 @@ export async function initializeFCM(): Promise<boolean> {
       if (serviceAccountJson) {
         try {
           const serviceAccount = JSON.parse(serviceAccountJson);
+          
+          // Validate required fields
+          if (!serviceAccount.project_id || !serviceAccount.private_key || !serviceAccount.client_email) {
+            console.error('FIREBASE_SERVICE_ACCOUNT JSON is missing required fields (project_id, private_key, client_email)');
+            return false;
+          }
+
+          // Check if project ID matches
+          if (serviceAccount.project_id !== settings.fcmProjectId) {
+            console.warn(`Service account project_id (${serviceAccount.project_id}) does not match database fcmProjectId (${settings.fcmProjectId})`);
+          }
+
           firebaseApp = admin.initializeApp({
             credential: admin.credential.cert(serviceAccount),
             projectId: settings.fcmProjectId,
           });
-        } catch (error) {
-          console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT JSON:', error);
+          console.log('FCM initialized successfully using FIREBASE_SERVICE_ACCOUNT');
+        } catch (error: any) {
+          console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT JSON:', error.message);
           return false;
         }
       } else if (credentialsPath) {
-        firebaseApp = admin.initializeApp({
-          credential: admin.credential.applicationDefault(),
-          projectId: settings.fcmProjectId,
-        });
+        try {
+          firebaseApp = admin.initializeApp({
+            credential: admin.credential.applicationDefault(),
+            projectId: settings.fcmProjectId,
+          });
+          console.log('FCM initialized successfully using GOOGLE_APPLICATION_CREDENTIALS');
+        } catch (error: any) {
+          console.error('Failed to initialize FCM with GOOGLE_APPLICATION_CREDENTIALS:', error.message);
+          return false;
+        }
       } else {
-        console.warn('Firebase service account not configured. Set FIREBASE_SERVICE_ACCOUNT (JSON string) or GOOGLE_APPLICATION_CREDENTIALS (file path)');
+        console.error('Firebase service account not configured. Set FIREBASE_SERVICE_ACCOUNT (JSON string) or GOOGLE_APPLICATION_CREDENTIALS (file path)');
         return false;
       }
     } else {
       firebaseApp = admin.app();
+      console.log('FCM using existing Firebase Admin app');
     }
 
     fcmInitialized = true;
     return true;
-  } catch (error) {
-    console.error('Failed to initialize FCM:', error);
+  } catch (error: any) {
+    console.error('Failed to initialize FCM:', error.message || error);
     return false;
   }
 }
@@ -251,7 +271,7 @@ export async function sendPushNotificationToAll(
   body: string,
   imageUrl?: string,
   data?: Record<string, string>
-): Promise<{ successCount: number; failureCount: number; totalUsers: number }> {
+): Promise<{ successCount: number; failureCount: number; totalUsers: number; error?: string }> {
   try {
     // Get all active users with FCM tokens
     const users = await prisma.appUser.findMany({
@@ -271,13 +291,16 @@ export async function sendPushNotificationToAll(
       .filter((token): token is string => token !== null);
 
     if (fcmTokens.length === 0) {
+      console.warn('No active users with FCM tokens found');
       return {
         successCount: 0,
         failureCount: 0,
         totalUsers: 0,
+        error: 'No active users with FCM tokens found',
       };
     }
 
+    console.log(`Sending push notification to ${fcmTokens.length} users`);
     const result = await sendPushNotificationToMultiple(fcmTokens, title, body, imageUrl, data);
 
     return {
@@ -291,6 +314,7 @@ export async function sendPushNotificationToAll(
       successCount: 0,
       failureCount: 0,
       totalUsers: 0,
+      error: error.message || 'Failed to send push notifications',
     };
   }
 }
