@@ -307,11 +307,34 @@ export default function NotificationsPage() {
         throw new Error('Failed to update notification status');
       }
 
+      const responseData = await response.json();
+      
+      // Check push notification results if notification was activated
+      let notificationMessage = `Notification ${!currentStatus ? 'activated' : 'deactivated'} successfully`;
+      
+      if (responseData.pushNotification && !currentStatus) {
+        // Notification was just activated, show push notification results
+        const push = responseData.pushNotification;
+        if (push.totalUsers === 0) {
+          notificationMessage += '\n\n⚠️ No active users with FCM tokens found';
+        } else if (push.sent && push.successCount > 0) {
+          notificationMessage += `\n\n✅ Push notification sent to ${push.successCount} user(s)`;
+          if (push.failureCount > 0) {
+            notificationMessage += ` (${push.failureCount} failed - invalid tokens removed)`;
+          }
+        } else if (push.successCount === 0 && push.failureCount > 0) {
+          notificationMessage += `\n\n⚠️ Push notification failed to send (${push.failureCount} failures)`;
+          if (push.error) {
+            notificationMessage += `\n\nError: ${push.error}`;
+          }
+        }
+      }
+
       await fetchNotifications();
       setNotification({
         title: 'Success',
-        message: `Notification ${!currentStatus ? 'activated' : 'deactivated'} successfully`,
-        type: 'success',
+        message: notificationMessage,
+        type: (responseData.pushNotification?.successCount ?? 0) > 0 ? 'success' : 'success',
       });
       setShowNotification(true);
     } catch (err) {
