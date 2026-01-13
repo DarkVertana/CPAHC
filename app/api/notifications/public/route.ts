@@ -49,7 +49,8 @@ export async function GET(request: NextRequest) {
       const notification = await prisma.notification.findFirst({
         where: {
           id: notificationId,
-          isActive: true, // Only return active notifications
+          isActive: true,
+          source: 'admin', // Only show admin-created notifications
         },
       });
 
@@ -67,21 +68,24 @@ export async function GET(request: NextRequest) {
           title: notification.title,
           description: notification.description,
           image: notification.image,
+          url: notification.url,
+          type: notification.type,
+          icon: notification.icon,
           createdAt: notification.createdAt.toISOString(),
           updatedAt: notification.updatedAt.toISOString(),
         },
       });
     }
 
-    // Get active notifications with pagination
+    // Get active notifications with pagination (only admin-created)
     const [notifications, total] = await Promise.all([
       prisma.notification.findMany({
-        where: { isActive: true },
+        where: { isActive: true, source: 'admin' },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
       }),
-      prisma.notification.count({ where: { isActive: true } }),
+      prisma.notification.count({ where: { isActive: true, source: 'admin' } }),
     ]);
 
     return NextResponse.json({
@@ -91,6 +95,9 @@ export async function GET(request: NextRequest) {
         title: notification.title,
         description: notification.description,
         image: notification.image,
+        url: notification.url,
+        type: notification.type,
+        icon: notification.icon,
         createdAt: notification.createdAt.toISOString(),
         updatedAt: notification.updatedAt.toISOString(),
       })),

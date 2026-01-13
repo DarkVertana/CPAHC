@@ -255,21 +255,58 @@ model Notification {
   image       String?  // Path to notification image
   url         String?  // URL/route for mobile app navigation (e.g., /medicines, /blogs/123)
   isActive    Boolean  @default(true)
-  
+
+  // Notification type and categorization
+  type        String   @default("general")  // general, order, subscription, promotion
+  icon        String?  // Icon identifier for mobile app (e.g., ic_order_completed)
+  source      String   @default("admin")    // admin, webhook, system
+
   // Tracking metrics
   receiverCount Int    @default(0) // Number of users who received the push notification
   viewCount     Int    @default(0) // Number of users who viewed/opened the notification
-  
+
   // Relations
   views         NotificationView[]
-  
+
   // Timestamps
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
   @@index([isActive])
   @@index([createdAt])
+  @@index([type])
+  @@index([source])
   @@map("notifications")
+}
+
+model WebhookLog {
+  id            String   @id @default(cuid())
+  source        String   // woocommerce, stripe, etc.
+  event         String   // order_status, subscription_status
+  resourceId    String   // Order ID, Subscription ID
+  status        String   // Status received (completed, cancelled, etc.)
+  customerEmail String?  // Customer email for tracking
+
+  // Notification details
+  notificationTitle String?
+  notificationBody  String?
+
+  // Push notification result
+  pushSent      Boolean  @default(false)
+  pushSuccess   Boolean  @default(false)
+  pushError     String?
+
+  // Raw data for debugging
+  payload       Json?    // Raw webhook payload
+
+  // Timestamps
+  createdAt     DateTime @default(now())
+
+  @@index([source, event])
+  @@index([customerEmail])
+  @@index([resourceId])
+  @@index([createdAt])
+  @@map("webhook_logs")
 }
 
 model NotificationView {

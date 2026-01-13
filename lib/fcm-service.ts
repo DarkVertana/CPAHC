@@ -4,6 +4,74 @@ import * as admin from 'firebase-admin';
 let fcmInitialized = false;
 let firebaseApp: admin.app.App | null = null;
 
+// ============================================
+// TYPE DEFINITIONS
+// ============================================
+
+export type NotificationType = 'general' | 'order' | 'subscription' | 'promotion';
+export type NotificationSource = 'admin' | 'webhook' | 'system';
+
+export interface PushNotificationOptions {
+  title: string;
+  body: string;
+  imageUrl?: string;
+  type?: NotificationType;
+  icon?: string;
+  data?: Record<string, string>;
+}
+
+// ============================================
+// ICON MAPPING FOR ORDER/SUBSCRIPTION STATUS
+// ============================================
+
+export const ORDER_STATUS_ICONS: Record<string, string> = {
+  'pending': 'ic_order_pending',
+  'processing': 'ic_order_processing',
+  'on-hold': 'ic_order_hold',
+  'completed': 'ic_order_completed',
+  'cancelled': 'ic_order_cancelled',
+  'refunded': 'ic_order_refunded',
+  'failed': 'ic_order_failed',
+};
+
+export const SUBSCRIPTION_STATUS_ICONS: Record<string, string> = {
+  'active': 'ic_sub_active',
+  'on-hold': 'ic_sub_hold',
+  'pending': 'ic_sub_pending',
+  'pending-cancel': 'ic_sub_pending',
+  'cancelled': 'ic_sub_cancelled',
+  'expired': 'ic_sub_expired',
+  'switched': 'ic_sub_active',
+};
+
+export const NOTIFICATION_TYPE_ICONS: Record<NotificationType, string> = {
+  'general': 'ic_notification',
+  'order': 'ic_order_pending',
+  'subscription': 'ic_sub_active',
+  'promotion': 'ic_promo',
+};
+
+/**
+ * Get icon for order status
+ */
+export function getOrderStatusIcon(status: string): string {
+  return ORDER_STATUS_ICONS[status] || 'ic_order_pending';
+}
+
+/**
+ * Get icon for subscription status
+ */
+export function getSubscriptionStatusIcon(status: string): string {
+  return SUBSCRIPTION_STATUS_ICONS[status] || 'ic_sub_pending';
+}
+
+/**
+ * Get icon for notification type
+ */
+export function getNotificationTypeIcon(type: NotificationType): string {
+  return NOTIFICATION_TYPE_ICONS[type] || 'ic_notification';
+}
+
 /**
  * Initialize FCM using Firebase Admin SDK (uses new FCM API v1 internally)
  * Requires service account credentials in environment variable FIREBASE_SERVICE_ACCOUNT
@@ -100,6 +168,98 @@ export async function initializeFCM(): Promise<boolean> {
     return false;
   }
 }
+
+// ============================================
+// ORDER/SUBSCRIPTION STATUS MESSAGES
+// ============================================
+
+export const ORDER_STATUS_MESSAGES: Record<string, { title: string; getMessage: (orderNumber: string) => string }> = {
+  'pending': {
+    title: 'Order Received',
+    getMessage: (n) => `Your order #${n} has been received and is being processed.`,
+  },
+  'processing': {
+    title: 'Order Processing',
+    getMessage: (n) => `Your order #${n} is being processed.`,
+  },
+  'on-hold': {
+    title: 'Order On Hold',
+    getMessage: (n) => `Your order #${n} is currently on hold.`,
+  },
+  'completed': {
+    title: 'Order Completed',
+    getMessage: (n) => `Your order #${n} has been completed! Thank you for your purchase.`,
+  },
+  'cancelled': {
+    title: 'Order Cancelled',
+    getMessage: (n) => `Your order #${n} has been cancelled.`,
+  },
+  'refunded': {
+    title: 'Order Refunded',
+    getMessage: (n) => `Your order #${n} has been refunded.`,
+  },
+  'failed': {
+    title: 'Order Failed',
+    getMessage: (n) => `Your order #${n} payment failed. Please try again.`,
+  },
+};
+
+export const SUBSCRIPTION_STATUS_MESSAGES: Record<string, { title: string; getMessage: (subNumber: string) => string }> = {
+  'active': {
+    title: 'Subscription Active',
+    getMessage: (n) => `Your subscription #${n} is now active.`,
+  },
+  'on-hold': {
+    title: 'Subscription On Hold',
+    getMessage: (n) => `Your subscription #${n} is currently on hold.`,
+  },
+  'pending': {
+    title: 'Subscription Pending',
+    getMessage: (n) => `Your subscription #${n} is pending activation.`,
+  },
+  'pending-cancel': {
+    title: 'Cancellation Pending',
+    getMessage: (n) => `Your subscription #${n} cancellation is pending.`,
+  },
+  'cancelled': {
+    title: 'Subscription Cancelled',
+    getMessage: (n) => `Your subscription #${n} has been cancelled.`,
+  },
+  'expired': {
+    title: 'Subscription Expired',
+    getMessage: (n) => `Your subscription #${n} has expired.`,
+  },
+  'switched': {
+    title: 'Subscription Switched',
+    getMessage: (n) => `Your subscription #${n} has been switched.`,
+  },
+};
+
+/**
+ * Get order status message
+ */
+export function getOrderStatusMessage(status: string, orderNumber: string): { title: string; body: string } {
+  const msg = ORDER_STATUS_MESSAGES[status];
+  if (msg) {
+    return { title: msg.title, body: msg.getMessage(orderNumber) };
+  }
+  return { title: 'Order Updated', body: `Your order #${orderNumber} status has been updated to ${status}.` };
+}
+
+/**
+ * Get subscription status message
+ */
+export function getSubscriptionStatusMessage(status: string, subNumber: string): { title: string; body: string } {
+  const msg = SUBSCRIPTION_STATUS_MESSAGES[status];
+  if (msg) {
+    return { title: msg.title, body: msg.getMessage(subNumber) };
+  }
+  return { title: 'Subscription Updated', body: `Your subscription #${subNumber} status has been updated to ${status}.` };
+}
+
+// ============================================
+// PUSH NOTIFICATION FUNCTIONS
+// ============================================
 
 /**
  * Send push notification to a single device using Firebase Admin SDK
