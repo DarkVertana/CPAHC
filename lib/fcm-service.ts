@@ -3,13 +3,6 @@ import * as admin from 'firebase-admin';
 
 let fcmInitialized = false;
 let firebaseApp: admin.app.App | null = null;
-let cachedProjectId: string | null = null;
-let settingsCacheTime: number = 0;
-const SETTINGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
-
-// User FCM token cache for faster lookups
-const userTokenCache = new Map<string, { token: string; timestamp: number }>();
-const USER_TOKEN_CACHE_TTL = 60 * 1000; // 1 minute cache (short to handle token updates)
 
 // ============================================
 // TYPE DEFINITIONS
@@ -85,31 +78,17 @@ export function getNotificationTypeIcon(type: NotificationType): string {
  * or GOOGLE_APPLICATION_CREDENTIALS pointing to service account JSON file
  */
 export async function initializeFCM(): Promise<boolean> {
-  // Return immediately if already initialized
   if (fcmInitialized && firebaseApp) {
     return true;
   }
 
   try {
-    // Use cached settings if available and not expired
-    let projectId = cachedProjectId;
-    const now = Date.now();
+    // Get FCM settings from database
+    const settings = await prisma.settings.findUnique({
+      where: { id: 'settings' },
+    });
 
-    if (!projectId || (now - settingsCacheTime) > SETTINGS_CACHE_TTL) {
-      // Get FCM settings from database (only when cache expired)
-      const settings = await prisma.settings.findUnique({
-        where: { id: 'settings' },
-        select: { fcmProjectId: true }, // Only select what we need
-      });
-
-      if (settings?.fcmProjectId) {
-        cachedProjectId = settings.fcmProjectId;
-        settingsCacheTime = now;
-        projectId = settings.fcmProjectId;
-      }
-    }
-
-    if (!projectId) {
+    if (!settings?.fcmProjectId) {
       console.error('FCM project ID not configured in database settings');
       return false;
     }
@@ -143,14 +122,14 @@ export async function initializeFCM(): Promise<boolean> {
           }
 
           // Check if project ID matches
-          if (serviceAccount.project_id !== projectId) {
-            console.warn(`Service account project_id (${serviceAccount.project_id}) does not match database fcmProjectId (${projectId})`);
+          if (serviceAccount.project_id !== settings.fcmProjectId) {
+            console.warn(`Service account project_id (${serviceAccount.project_id}) does not match database fcmProjectId (${settings.fcmProjectId})`);
             console.warn('Using project_id from service account JSON instead');
           }
 
           firebaseApp = admin.initializeApp({
             credential: admin.credential.cert(serviceAccount),
-            projectId: projectId,
+            projectId: settings.fcmProjectId,
           });
           console.log('FCM initialized successfully using FIREBASE_SERVICE_ACCOUNT');
           console.log(`Project ID: ${serviceAccount.project_id}, Client Email: ${serviceAccount.client_email}`);
@@ -166,7 +145,7 @@ export async function initializeFCM(): Promise<boolean> {
         try {
           firebaseApp = admin.initializeApp({
             credential: admin.credential.applicationDefault(),
-            projectId: projectId,
+            projectId: settings.fcmProjectId,
           });
           console.log('FCM initialized successfully using GOOGLE_APPLICATION_CREDENTIALS');
         } catch (error: any) {
@@ -614,7 +593,6 @@ export async function sendPushNotificationToAll(
 
 /**
  * Send push notification to a specific user by email or wpUserId
- * Uses caching for faster repeated lookups
  */
 export async function sendPushNotificationToUser(
   emailOrWpUserId: string,
@@ -624,50 +602,44 @@ export async function sendPushNotificationToUser(
   data?: Record<string, string>
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
-    const cacheKey = emailOrWpUserId.toLowerCase();
-    const now = Date.now();
-    let fcmToken: string | null = null;
+    console.log('Looking up user for push notification:', emailOrWpUserId);
 
-    // Check cache first
-    const cached = userTokenCache.get(cacheKey);
-    if (cached && (now - cached.timestamp) < USER_TOKEN_CACHE_TTL) {
-      fcmToken = cached.token;
-    } else {
-      // Cache miss or expired - lookup from database
-      const user = await prisma.appUser.findFirst({
-        where: {
-          OR: [
-            { email: { equals: emailOrWpUserId, mode: 'insensitive' } },
-            { wpUserId: emailOrWpUserId },
-          ],
-          fcmToken: { not: null },
-          status: 'Active',
+    // Case-insensitive email lookup
+    const user = await prisma.appUser.findFirst({
+      where: {
+        OR: [
+          { email: { equals: emailOrWpUserId, mode: 'insensitive' } },
+          { wpUserId: emailOrWpUserId },
+        ],
+        fcmToken: {
+          not: null,
         },
-        select: { fcmToken: true },
-      });
+        status: 'Active',
+      },
+      select: {
+        id: true,
+        email: true,
+        fcmToken: true,
+      },
+    });
 
-      if (user?.fcmToken) {
-        fcmToken = user.fcmToken;
-        // Update cache
-        userTokenCache.set(cacheKey, { token: fcmToken, timestamp: now });
-      }
-    }
-
-    if (!fcmToken) {
+    if (!user || !user.fcmToken) {
+      console.log('User not found or no FCM token for:', emailOrWpUserId);
       return {
         success: false,
         error: `User not found or no FCM token for: ${emailOrWpUserId}`,
       };
     }
 
-    const result = await sendPushNotification(fcmToken, title, body, imageUrl, data);
+    console.log('Found user:', user.email, 'sending push...');
 
-    // If token was invalid, remove from cache
-    if (!result.success && result.error === 'Invalid FCM token') {
-      userTokenCache.delete(cacheKey);
-    }
-
-    return result;
+    return await sendPushNotification(
+      user.fcmToken,
+      title,
+      body,
+      imageUrl,
+      data
+    );
   } catch (error: any) {
     console.error('Error sending push notification to user:', error);
     return {
@@ -675,12 +647,5 @@ export async function sendPushNotificationToUser(
       error: error.message || 'Failed to send push notification',
     };
   }
-}
-
-/**
- * Clear user token from cache (call when token is updated)
- */
-export function clearUserTokenCache(emailOrWpUserId: string) {
-  userTokenCache.delete(emailOrWpUserId.toLowerCase());
 }
 

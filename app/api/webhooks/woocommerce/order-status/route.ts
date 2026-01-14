@@ -8,23 +8,31 @@ import {
 
 /**
  * WooCommerce Webhook for Order Status Updates
- * Push notification is sent synchronously for reliability in production (PM2)
- * Database logging is fire-and-forget for speed
  */
 export async function POST(request: NextRequest) {
-  const startTime = Date.now();
+  console.log('=== ORDER WEBHOOK RECEIVED ===');
 
   try {
     // Read body once
     const text = await request.text();
+    console.log('Raw body length:', text.length);
+    console.log('Raw body preview:', text.substring(0, 300));
 
-    // Handle empty body (ping)
+    // Check headers
+    const contentType = request.headers.get('content-type') || '';
+    const webhookTopic = request.headers.get('x-wc-webhook-topic');
+    const webhookSource = request.headers.get('x-wc-webhook-source');
+    console.log('Headers:', { contentType, webhookTopic, webhookSource });
+
+    // Handle empty body
     if (!text || !text.trim()) {
+      console.log('Empty body - ping response');
       return NextResponse.json({ success: true, message: 'Ping received' });
     }
 
     // Handle form-urlencoded ping (e.g., "webhook_id=68")
     if (text.includes('webhook_id=') && !text.startsWith('{')) {
+      console.log('WooCommerce ping (form-urlencoded):', text);
       return NextResponse.json({ success: true, message: 'Webhook ping received' });
     }
 
@@ -33,11 +41,13 @@ export async function POST(request: NextRequest) {
     try {
       body = JSON.parse(text);
     } catch (parseError) {
+      console.error('JSON parse error - treating as ping');
       return NextResponse.json({ success: true, message: 'Acknowledged' });
     }
 
     // Handle WooCommerce ping (has webhook_id but no order data)
     if (body.webhook_id && !body.id) {
+      console.log('WooCommerce ping with webhook_id:', body.webhook_id);
       return NextResponse.json({ success: true, message: 'Webhook ping received' });
     }
 
@@ -47,8 +57,11 @@ export async function POST(request: NextRequest) {
     const customerEmail = body.billing?.email || body.customer_email || body.email;
     const orderNumber = body.number || body.order_number || orderId;
 
+    console.log('Order Data:', { orderId, orderStatus, customerEmail, orderNumber });
+
     // Validate required fields
     if (!orderId || !orderStatus) {
+      console.log('Missing order data - not an order webhook');
       return NextResponse.json({ success: true, message: 'Not an order event' });
     }
 
@@ -57,17 +70,21 @@ export async function POST(request: NextRequest) {
     const icon = getOrderStatusIcon(orderStatus);
     const url = `/orders/${orderId}`;
 
-    // Send push notification SYNCHRONOUSLY (required for PM2/production)
+    console.log('Notification:', { title, message, icon });
+
+    // Send push notification
     let pushResult = { success: false, error: 'No customer email' } as { success: boolean; messageId?: string; error?: string };
 
     if (customerEmail) {
+      console.log('Sending push to:', customerEmail);
+      // Use same data format as CRUD notifications for Flutter compatibility
       pushResult = await sendPushNotificationToUser(
         customerEmail,
         title,
         message,
         undefined,
         {
-          type: 'notification',
+          type: 'notification',  // Same as CRUD notifications
           notificationType: 'order_status',
           icon,
           orderId: String(orderId),
@@ -75,34 +92,42 @@ export async function POST(request: NextRequest) {
           url,
         }
       );
-      console.log(`Push sent in ${Date.now() - startTime}ms:`, pushResult.success ? 'SUCCESS' : pushResult.error);
+      console.log('Push result:', pushResult);
+    } else {
+      console.log('No customer email found in webhook payload');
     }
 
-    // Log to database (fire-and-forget - doesn't block response)
-    prisma.webhookLog.create({
-      data: {
-        source: 'woocommerce',
-        event: 'order_status',
-        resourceId: String(orderId),
-        status: orderStatus,
-        customerEmail: customerEmail || null,
-        notificationTitle: title,
-        notificationBody: message,
-        pushSent: !!customerEmail,
-        pushSuccess: pushResult.success,
-        pushError: pushResult.error || null,
-        payload: body,
-      },
-    }).catch((err: Error) => console.log('DB log error:', err.message));
+    // Try to log to database
+    try {
+      await prisma.webhookLog.create({
+        data: {
+          source: 'woocommerce',
+          event: 'order_status',
+          resourceId: String(orderId),
+          status: orderStatus,
+          customerEmail: customerEmail || null,
+          notificationTitle: title,
+          notificationBody: message,
+          pushSent: !!customerEmail,
+          pushSuccess: pushResult.success,
+          pushError: pushResult.error || null,
+          payload: body,
+        },
+      });
+    } catch (dbError) {
+      console.log('DB log skipped');
+    }
 
-    console.log(`Order webhook completed in ${Date.now() - startTime}ms`);
+    console.log('=== ORDER WEBHOOK COMPLETE ===');
 
     return NextResponse.json({
       success: true,
       orderId,
       orderStatus,
+      customerEmail,
       pushSent: !!customerEmail,
       pushSuccess: pushResult.success,
+      pushError: pushResult.error,
     });
 
   } catch (error: any) {
