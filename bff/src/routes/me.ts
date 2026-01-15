@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
-import { prisma } from '../lib/prisma';
-import { AccessTokenPayload } from '../types';
+import { prisma } from '../lib/prisma.js';
+import { AccessTokenPayload } from '../types/index.js';
 
 const meRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /v1/me

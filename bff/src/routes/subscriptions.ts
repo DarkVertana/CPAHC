@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
-import { getCustomerSubscriptions } from '../services/subscriptions.service';
-import { AccessTokenPayload } from '../types';
+import { getCustomerSubscriptions } from '../services/subscriptions.service.js';
+import { AccessTokenPayload } from '../types/index.js';
 
 const subscriptionsRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /v1/me/subscriptions

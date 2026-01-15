@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
-import { getOrderTreatment, getOrdersWithTreatments } from '../services/treatments.service';
-import { AccessTokenPayload } from '../types';
+import { getOrderTreatment, getOrdersWithTreatments } from '../services/treatments.service.js';
+import { AccessTokenPayload } from '../types/index.js';
 
 const treatmentsRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /v1/me/treatments

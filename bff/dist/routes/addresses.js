@@ -1,0 +1,48 @@
+import { getCustomerAddresses, updateCustomerAddresses } from '../services/addresses.service.js';
+const addressesRoutes = async (fastify) => {
+    // GET /v1/me/addresses
+    fastify.get('/addresses', async (request, reply) => {
+        const user = request.user;
+        if (!user) {
+            return reply.code(401).send({ error: 'Unauthorized' });
+        }
+        try {
+            const addresses = await getCustomerAddresses(fastify, user.wooCustomerId);
+            // Mask sensitive fields in response (for logging, actual response is full)
+            return reply.code(200).send(addresses);
+        }
+        catch (error) {
+            fastify.log.error({ err: error }, 'Error fetching addresses');
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            return reply.code(500).send({
+                error: 'Failed to fetch addresses',
+                details: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
+            });
+        }
+    });
+    // PATCH /v1/me/addresses
+    fastify.patch('/addresses', async (request, reply) => {
+        const user = request.user;
+        if (!user) {
+            return reply.code(401).send({ error: 'Unauthorized' });
+        }
+        const { billing, shipping } = request.body;
+        if (!billing && !shipping) {
+            return reply.code(400).send({ error: 'At least one address (billing or shipping) must be provided' });
+        }
+        try {
+            const updated = await updateCustomerAddresses(fastify, user.wooCustomerId, billing, shipping);
+            return reply.code(200).send(updated);
+        }
+        catch (error) {
+            fastify.log.error({ err: error }, 'Error updating addresses');
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            return reply.code(500).send({
+                error: 'Failed to update addresses',
+                details: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
+            });
+        }
+    });
+};
+export default addressesRoutes;
+//# sourceMappingURL=addresses.js.map

@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
-import { getOrderDetails } from './orders.service';
-import { getCustomerOrders } from './orders.service';
-import { Treatment } from '../schemas/treatment.schema';
+import { getOrderDetails } from './orders.service.js';
+import { getCustomerOrders } from './orders.service.js';
+import { Treatment } from '../schemas/treatment.schema.js';
 
 interface WooCommerceOrder {
   id: number;

@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'nextjs-admin',
+      name: 'nextjs-app',
       cwd: './',
       script: 'node_modules/.bin/next',
       args: 'start',

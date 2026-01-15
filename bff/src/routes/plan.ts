@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
-import { getActivePlan } from '../services/plan.service';
-import { AccessTokenPayload } from '../types';
+import { getActivePlan } from '../services/plan.service.js';
+import { AccessTokenPayload } from '../types/index.js';
 
 const planRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /v1/me/plan

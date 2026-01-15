@@ -1,7 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import jwt from '@fastify/jwt';
 import fp from 'fastify-plugin';
-import { AccessTokenPayload } from '../types';
+import { AccessTokenPayload } from '../types/index.js';
 
 interface AuthPluginOptions {
   jwtSecret: string;

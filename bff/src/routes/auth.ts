@@ -1,13 +1,13 @@
 import { FastifyPluginAsync } from 'fastify';
 import bcrypt from 'bcryptjs';
-import { prisma } from '../lib/prisma';
+import { prisma } from '../lib/prisma.js';
 import {
   validateWordPressCredentials,
   getWooCommerceCustomerId,
   upsertAppUser,
-} from '../services/auth.service';
-import { generateAccessToken } from '../plugins/auth';
-import { AccessTokenPayload, LoginResponse } from '../types';
+} from '../services/auth.service.js';
+import { generateAccessToken } from '../plugins/auth.js';
+import { AccessTokenPayload, LoginResponse } from '../types/index.js';
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   const wpBaseUrl = process.env.WP_BASE_URL || '';

@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
-import { getActiveSubscriptions } from './subscriptions.service';
-import { getOrderDetails } from './orders.service';
-import { Treatment } from '../schemas/treatment.schema';
+import { getActiveSubscriptions } from './subscriptions.service.js';
+import { getOrderDetails } from './orders.service.js';
+import { Treatment } from '../schemas/treatment.schema.js';
 
 export interface PlanSubscription {
   subscription: {
