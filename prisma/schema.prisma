@@ -154,6 +154,7 @@ model AppUser {
   weightLogs     WeightLog[]
   medicationLogs MedicationLog[]
   notificationViews NotificationView[]
+  refreshTokens  MobileRefreshToken[]
   
   // Timestamps
   createdAt      DateTime @default(now())
@@ -162,6 +163,25 @@ model AppUser {
   @@index([email])
   @@index([wpUserId])
   @@map("app_user")
+}
+
+model MobileRefreshToken {
+  id           String   @id @default(cuid())
+  token        String   @unique    // Hashed refresh token
+  appUserId    String              // FK to AppUser
+  wooCustomerId Int               // WooCommerce customer ID
+  userEmail    String
+  deviceId     String?            // Optional device identifier
+  expiresAt   DateTime
+  createdAt    DateTime @default(now())
+  revokedAt    DateTime?          // Null = active, set = revoked
+  
+  appUser      AppUser  @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+  
+  @@index([appUserId])
+  @@index([token])
+  @@index([expiresAt])
+  @@map("mobile_refresh_tokens")
 }
 
 model Blog {
